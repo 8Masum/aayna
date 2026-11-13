@@ -1,0 +1,30 @@
+# Gradle & Android build outputs
+.gradle/
+build/
+**/build/
+local.properties
+captures/
+.navigation/
+output.json
+
+# IDE & OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Keystores & signing secrets (NEVER commit)
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+keystore.properties
+signing.properties
+
+# Kotlin & KSP
+.kotlin/
+ksp-output/

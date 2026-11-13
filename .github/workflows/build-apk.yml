@@ -1,0 +1,170 @@
+name: Build and Release Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: true
+      tag_name:
+        description: 'Release tag name (e.g. v1.0.1). Defaults to v1.0.0 if empty.'
+        required: false
+        type: string
+        default: ''
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run ktlint, unit tests, and Android lint
+        run: ./gradlew ktlintCheck testDebugUnitTest lintDebug --no-daemon
+
+      - name: Decode and verify release keystore
+        if: github.event_name != 'pull_request'
+        env:
+          AAYNA_KEYSTORE_BASE64: ${{ secrets.AAYNA_KEYSTORE_BASE64 }}
+          AAYNA_KEYSTORE_PASSWORD: ${{ secrets.AAYNA_KEYSTORE_PASSWORD }}
+          AAYNA_KEY_ALIAS: ${{ secrets.AAYNA_KEY_ALIAS }}
+        run: |
+          if [ -z "$AAYNA_KEYSTORE_BASE64" ]; then
+            echo "::error::AAYNA_KEYSTORE_BASE64 secret is not set!"
+            exit 1
+          fi
+          KEYSTORE_FILE="${RUNNER_TEMP}/aayna-release.p12"
+          echo "$AAYNA_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_FILE"
+          keytool -list -v \
+            -keystore "$KEYSTORE_FILE" \
+            -storetype PKCS12 \
+            -storepass "$AAYNA_KEYSTORE_PASSWORD" \
+            -alias "$AAYNA_KEY_ALIAS"
+          echo "AAYNA_KEYSTORE_PATH=$KEYSTORE_FILE" >> "$GITHUB_ENV"
+
+      - name: Compute version metadata
+        id: version
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            RAW_TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ inputs.tag_name }}" ]; then
+            RAW_TAG="${{ inputs.tag_name }}"
+          else
+            RAW_TAG="v1.0.0"
+          fi
+
+          if [[ "$RAW_TAG" != v* ]]; then
+            RELEASE_TAG="v$RAW_TAG"
+          else
+            RELEASE_TAG="$RAW_TAG"
+          fi
+
+          VERSION_NAME="${RELEASE_TAG#v}"
+          BASE_VER="${VERSION_NAME%%-*}"
+          IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE_VER"
+          MAJOR=${MAJOR:-1}
+          MINOR=${MINOR:-0}
+          PATCH=${PATCH:-0}
+          RUN_NUM=${GITHUB_RUN_NUMBER:-1}
+          VERSION_CODE=$((MAJOR * 1000000 + MINOR * 10000 + PATCH * 100 + (RUN_NUM % 100)))
+
+          echo "RELEASE_TAG=$RELEASE_TAG" >> "$GITHUB_ENV"
+          echo "VERSION_NAME=$VERSION_NAME" >> "$GITHUB_ENV"
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "Computed versionName=$VERSION_NAME, versionCode=$VERSION_CODE (tag=$RELEASE_TAG)"
+
+      - name: Build Signed Release APK
+        if: github.event_name != 'pull_request'
+        env:
+          AAYNA_KEYSTORE_PASSWORD: ${{ secrets.AAYNA_KEYSTORE_PASSWORD }}
+          AAYNA_KEY_ALIAS: ${{ secrets.AAYNA_KEY_ALIAS }}
+          AAYNA_KEY_PASSWORD: ${{ secrets.AAYNA_KEY_PASSWORD }}
+        run: |
+          ./gradlew assembleRelease \
+            -Paayna.versionCode="${{ env.VERSION_CODE }}" \
+            -Paayna.versionName="${{ env.VERSION_NAME }}" \
+            --no-daemon
+
+      - name: Verify APK signature and prepare release assets
+        if: github.event_name != 'pull_request'
+        run: |
+          mkdir -p release-assets
+          APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::No release APK found!"
+            exit 1
+          fi
+          echo "Found release APK: $APK_FILE"
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --print-certs "$APK_FILE"
+          else
+            keytool -printcert -jarfile "$APK_FILE"
+          fi
+
+          cp "$APK_FILE" release-assets/Aayna.apk
+          cp "$APK_FILE" "release-assets/Aayna-${{ env.RELEASE_TAG }}.apk"
+          (cd release-assets && sha256sum *.apk > SHA256SUMS.txt)
+
+          echo "Prepared release assets:"
+          ls -lh release-assets/
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Upload Release APK Artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Aayna-Release-APK
+          path: release-assets/*
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: >
+          startsWith(github.ref, 'refs/tags/v') ||
+          (github.event_name == 'workflow_dispatch' && (inputs.publish_release == true || inputs.publish_release == 'true'))
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Aayna ${{ env.RELEASE_TAG }}
+          files: release-assets/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          body: |
+            ### Aayna ${{ env.RELEASE_TAG }}
+            - **Direct APK Download**: Tap [`Aayna.apk`](https://github.com/8Masum/aayna/releases/download/${{ env.RELEASE_TAG }}/Aayna.apk) (or [`Aayna-${{ env.RELEASE_TAG }}.apk`](https://github.com/8Masum/aayna/releases/download/${{ env.RELEASE_TAG }}/Aayna-${{ env.RELEASE_TAG }}.apk)) below to download directly to your Android device.
+            - **Privacy & Security**: 100% offline (`INTERNET` permission omitted), all optical processing and storage stay on-device.
+            - **Verification**: Check `SHA256SUMS.txt` to verify APK integrity.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
