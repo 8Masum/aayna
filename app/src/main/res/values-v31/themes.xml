@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Aayna.Splash" parent="Theme.Aayna">
+        <item name="android:windowSplashScreenBackground">@color/aayna_charcoal_bg</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/aayna_splash_logo</item>
+    </style>
+</resources>

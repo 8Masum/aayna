@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.Aayna" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/aayna_charcoal_bg</item>
+        <item name="android:statusBarColor">@color/aayna_charcoal_bg</item>
+        <item name="android:navigationBarColor">@color/aayna_charcoal_bg</item>
+    </style>
+
+    <style name="Theme.Aayna.Splash" parent="Theme.Aayna">
+        <item name="android:windowBackground">@color/aayna_charcoal_bg</item>
+    </style>
+</resources>
