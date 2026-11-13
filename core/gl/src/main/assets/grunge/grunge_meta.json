@@ -1,0 +1,39 @@
+{
+  "textures": {
+    "light_leak_warm": "grunge/light_leak_warm.png",
+    "light_leak_edge": "grunge/light_leak_edge.png",
+    "dust_scratches": "grunge/dust_scratches.png",
+    "instant_frame": "grunge/instant_frame.png",
+    "film_border_35mm": "grunge/film_border_35mm.png"
+  },
+  "frames": {
+    "instant_frame": {
+      "uMin": 0.0625,
+      "vMin": 0.0625,
+      "uMax": 0.9375,
+      "vMax": 0.796875,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        64,
+        64,
+        960,
+        816
+      ]
+    },
+    "film_border_35mm": {
+      "uMin": 0.046875,
+      "vMin": 0.09375,
+      "uMax": 0.953125,
+      "vMax": 0.90625,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        48,
+        96,
+        976,
+        928
+      ]
+    }
+  }
+}

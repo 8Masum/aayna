@@ -1,0 +1,14 @@
+{
+  "atlasWidth": 512,
+  "atlasHeight": 128,
+  "columns": 16,
+  "rows": 4,
+  "cellWidth": 32,
+  "cellHeight": 32,
+  "glyphPadding": 4,
+  "chars": "0123456789'.:-/ ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  "atlases": {
+    "dot_matrix": "stamps/dot_matrix_atlas.png",
+    "seven_segment": "stamps/seven_segment_atlas.png"
+  }
+}
