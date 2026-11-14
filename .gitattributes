@@ -1,0 +1,25 @@
+# Enforce consistent LF line endings matching .editorconfig across platforms
+* text=auto eol=lf
+
+# Shell scripts and Gradle wrapper must always use LF
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Binary assets and archives
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ttf binary
+*.otf binary
+*.ogg binary
+*.wav binary
+*.mp3 binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.keystore binary
+*.jks binary
+*.p12 binary
+*.pfx binary

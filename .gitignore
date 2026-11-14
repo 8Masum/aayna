@@ -1,11 +1,16 @@
 # Gradle & Android build outputs
 .gradle/
+.cxx/
 build/
 **/build/
 local.properties
 captures/
 .navigation/
 output.json
+*.apk
+*.aab
+*.ap_
+release-assets/
 
 # IDE & OS files
 .idea/
