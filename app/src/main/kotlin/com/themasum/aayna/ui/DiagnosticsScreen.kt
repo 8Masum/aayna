@@ -44,7 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.themasum.aayna.BuildConfig
 import com.themasum.aayna.R
 import com.themasum.aayna.core.camera.AaynaCameraController
+import com.themasum.aayna.core.gl.AaynaSurfaceProcessor
 import com.themasum.aayna.core.gl.OffscreenGlExporter
+import com.themasum.aayna.core.gl.StudioGlPreviewRenderer
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.GlDiagnosticsInfo
 import com.themasum.aayna.core.model.PassShaderStatus
@@ -61,7 +63,9 @@ fun DiagnosticsScreen(
     glDiagnosticsFlow: StateFlow<Pair<GlDiagnosticsInfo?, List<PassShaderStatus>>>,
     logger: AaynaLogger,
     onBack: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    surfaceProcessor: AaynaSurfaceProcessor? = null,
+    studioGlRenderer: StudioGlPreviewRenderer? = null
 ) {
     val context = LocalContext.current
     val shareChooserTitle = stringResource(R.string.share_diagnostics_chooser)
@@ -69,20 +73,45 @@ fun DiagnosticsScreen(
         initialValue = CameraCatalog.defaultCamera.id
     )
     val cameraCapability by cameraController.activeCapabilityInfo.collectAsStateWithLifecycle()
+    val resolvedDeviceQuirks by cameraController.resolvedDeviceQuirks.collectAsStateWithLifecycle()
     val liveGlDiagnostics by glDiagnosticsFlow.collectAsStateWithLifecycle()
 
+    val surfaceProcessorDiagnostics =
+        remember(surfaceProcessor, liveGlDiagnostics) {
+            surfaceProcessor?.getDiagnostics()
+        }
+    val studioRendererDiagnostics =
+        remember(studioGlRenderer, liveGlDiagnostics) {
+            studioGlRenderer?.getDiagnostics()
+        }
+    val exporterDiagnostics =
+        remember(offscreenExporter, liveGlDiagnostics) {
+            offscreenExporter.getDiagnostics()
+        }
+
     val (resolvedGlInfo, resolvedShaders) =
-        remember(liveGlDiagnostics, offscreenExporter) {
-            val (liveInfo, liveShaders) = liveGlDiagnostics
-            if (liveInfo != null) {
-                liveInfo to liveShaders
-            } else {
-                offscreenExporter.getDiagnostics()
-            }
+        remember(
+            liveGlDiagnostics,
+            surfaceProcessorDiagnostics,
+            studioRendererDiagnostics,
+            exporterDiagnostics
+        ) {
+            DiagnosticsReportBuilder.resolveBestGlDiagnostics(
+                liveGlDiagnostics,
+                surfaceProcessorDiagnostics,
+                studioRendererDiagnostics,
+                exporterDiagnostics
+            )
         }
 
     val report =
-        remember(activeProfileId, cameraCapability, resolvedGlInfo, resolvedShaders) {
+        remember(
+            activeProfileId,
+            cameraCapability,
+            resolvedGlInfo,
+            resolvedShaders,
+            resolvedDeviceQuirks
+        ) {
             DiagnosticsReportBuilder.build(
                 appVersion = "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                 deviceModel = Build.MODEL.orEmpty().ifBlank { "Unknown" },
@@ -90,7 +119,8 @@ fun DiagnosticsScreen(
                 activeCameraProfileId = activeProfileId,
                 cameraCapability = cameraCapability,
                 glInfo = resolvedGlInfo,
-                shaderStatuses = resolvedShaders
+                shaderStatuses = resolvedShaders,
+                deviceQuirks = resolvedDeviceQuirks
             )
         }
 
@@ -98,9 +128,36 @@ fun DiagnosticsScreen(
     var actionFeedback by remember { mutableStateOf<String?>(null) }
 
     val fullPayload =
-        remember(report, logText) {
+        remember(
+            report,
+            surfaceProcessorDiagnostics,
+            studioRendererDiagnostics,
+            exporterDiagnostics,
+            logText
+        ) {
             buildString {
                 appendLine(report.toShareableText())
+                appendLine()
+                appendLine("[GL Consumer Pipelines]")
+                appendLine(
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "SurfaceProcessor",
+                        diagnostics = surfaceProcessorDiagnostics
+                    )
+                )
+                appendLine(
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "StudioGlPreviewRenderer",
+                        diagnostics = studioRendererDiagnostics
+                    )
+                )
+                appendLine(
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "OffscreenGlExporter",
+                        diagnostics = exporterDiagnostics
+                    )
+                )
+                appendLine()
                 appendLine("[Rolling App Log]")
                 append(logText.ifBlank { "(No log entries recorded)" })
             }
@@ -115,7 +172,7 @@ fun DiagnosticsScreen(
             .navigationBarsPadding()
     ) {
         ConsoleTopBar(
-            title = "CAMERA2 & GL DIAGNOSTICS",
+            title = "CAMERA2, QUIRKS & GL DIAGNOSTICS",
             onBack = onBack
         )
 
@@ -186,6 +243,36 @@ fun DiagnosticsScreen(
                 DiagnosticKeyValue("Active Profile", report.activeCameraProfileId)
             }
 
+            ConsoleSection(title = "DEVICE QUIRK REGISTRY") {
+                val quirks = report.deviceQuirks
+                if (quirks == null) {
+                    Text(
+                        text = "Quirk profile unavailable.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AaynaColors.MutedText
+                    )
+                } else {
+                    val fp = quirks.fingerprint
+                    val flags = quirks.flags
+                    DiagnosticKeyValue("Manufacturer / Brand", "${fp.manufacturer} / ${fp.brand}")
+                    DiagnosticKeyValue("Model / Device", "${fp.model} / ${fp.device.ifBlank { "N/A" }}")
+                    DiagnosticKeyValue("Hardware / SDK", "${fp.hardware.ifBlank { "N/A" }} (API ${fp.sdkInt})")
+                    DiagnosticKeyValue(
+                        "Matched Rules",
+                        quirks.matchedRuleIds.ifEmpty { listOf("None") }.joinToString(", ")
+                    )
+                    DiagnosticKeyValue("Force Compat Preview", flags.forceCompatPreview.toString())
+                    DiagnosticKeyValue("Swap Front Mirror", flags.swapFrontMirror.toString())
+                    DiagnosticKeyValue("Clamp AE Range", flags.clampAeRange.toString())
+                    DiagnosticKeyValue("Disable Manual AE", flags.disableManualAe.toString())
+                    DiagnosticKeyValue("Disable Edge OFF", flags.disableEdgeOffOverride.toString())
+                    DiagnosticKeyValue("Disable NR OFF", flags.disableNoiseReductionOffOverride.toString())
+                    if (flags.notes.isNotBlank()) {
+                        DiagnosticKeyValue("Notes", flags.notes)
+                    }
+                }
+            }
+
             ConsoleSection(title = "CAMERA2 CAPABILITY") {
                 val cap = report.cameraCapability
                 DiagnosticKeyValue("Camera ID", cap.cameraId)
@@ -204,6 +291,27 @@ fun DiagnosticsScreen(
                 DiagnosticKeyValue("GL Version", gl.glVersion)
                 DiagnosticKeyValue("Max Texture Size", gl.maxTextureSize.toString())
                 DiagnosticKeyValue("Target FBO", gl.targetFboSize)
+                DiagnosticKeyValue(
+                    "SurfaceProcessor",
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "Viewfinder",
+                        diagnostics = surfaceProcessorDiagnostics
+                    )
+                )
+                DiagnosticKeyValue(
+                    "StudioGlRenderer",
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "Studio",
+                        diagnostics = studioRendererDiagnostics
+                    )
+                )
+                DiagnosticKeyValue(
+                    "OffscreenExporter",
+                    DiagnosticsReportBuilder.formatConsumerPipelineStatus(
+                        consumerName = "Exporter",
+                        diagnostics = exporterDiagnostics
+                    )
+                )
             }
 
             ConsoleSection(title = "SHADER PASS STATUS") {
@@ -226,7 +334,7 @@ fun DiagnosticsScreen(
                     Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(6.dp))
-                        .background(Color(0xFF0B0C0E))
+                        .background(AaynaColors.CharcoalRecessed)
                         .border(1.dp, AaynaColors.MetallicBorder, RoundedCornerShape(6.dp))
                         .horizontalScroll(rememberScrollState())
                         .padding(10.dp)

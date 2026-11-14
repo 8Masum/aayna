@@ -14,6 +14,7 @@ import com.themasum.aayna.feature.viewfinder.ViewfinderRoute
 import com.themasum.aayna.ui.DiagnosticsScreen
 import com.themasum.aayna.ui.SettingsScreen
 import com.themasum.aayna.ui.SplashScreen
+import com.themasum.aayna.ui.theme.AaynaFonts
 
 object AaynaRoutes {
     const val SPLASH = "splash"
@@ -69,7 +70,14 @@ fun AaynaNavGraph(
                 logger = container.logger,
                 onGlDiagnosticsUpdated = { info, statuses ->
                     container.updateGlDiagnostics(info, statuses)
-                }
+                },
+                surfaceProcessor = container.surfaceProcessor,
+                thumbnailCache = container.thumbnailMemoryCache,
+                ledFontFamily = AaynaFonts.LedSevenSegment,
+                dotMatrixFontFamily = AaynaFonts.DotMatrix,
+                vcrOsdFontFamily = AaynaFonts.VcrOsd,
+                pixelFontFamily = AaynaFonts.PixelLcd,
+                condensedFontFamily = AaynaFonts.HardwareCondensed
             )
         }
 
@@ -82,7 +90,14 @@ fun AaynaNavGraph(
                 filmRollRepository = container.filmRollRepository,
                 mediaStoreExporter = container.mediaStoreExporter,
                 soundEngine = container.soundEngine,
-                logger = container.logger
+                logger = container.logger,
+                studioGlRenderer = container.studioGlRenderer,
+                thumbnailCache = container.thumbnailMemoryCache,
+                ledFontFamily = AaynaFonts.LedSevenSegment,
+                dotMatrixFontFamily = AaynaFonts.DotMatrix,
+                vcrOsdFontFamily = AaynaFonts.VcrOsd,
+                pixelFontFamily = AaynaFonts.PixelLcd,
+                condensedFontFamily = AaynaFonts.HardwareCondensed
             )
         }
 
@@ -106,7 +121,9 @@ fun AaynaNavGraph(
                 offscreenExporter = container.offscreenExporter,
                 glDiagnosticsFlow = container.glDiagnosticsFlow,
                 logger = container.logger,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                surfaceProcessor = container.surfaceProcessor,
+                studioGlRenderer = container.studioGlRenderer
             )
         }
     }

@@ -2,8 +2,11 @@ package com.themasum.aayna.ui
 
 import com.themasum.aayna.core.model.CaptureStorageMode
 import com.themasum.aayna.core.model.ResolutionPreset
+import com.themasum.aayna.core.model.StampFontStyle
 import com.themasum.aayna.core.model.StampFormat
+import com.themasum.aayna.core.model.StampPosition
 import com.themasum.aayna.core.model.StampStyle
+import com.themasum.aayna.core.model.UserSettingsSnapshot
 
 object SettingsLabelFormatter {
     fun storageModeTitle(mode: CaptureStorageMode): String = when (mode) {
@@ -41,4 +44,26 @@ object SettingsLabelFormatter {
         StampStyle.CLEAN_WHITE -> "Clean White"
         StampStyle.QUARTZ_ORANGE -> "Quartz Orange"
     }
+
+    fun stampFontLabel(fontStyle: StampFontStyle): String = when (fontStyle) {
+        StampFontStyle.DOT_MATRIX -> "Dot Matrix"
+        StampFontStyle.SEVEN_SEGMENT -> "7-Segment"
+        StampFontStyle.VCR_OSD -> "VCR OSD"
+        StampFontStyle.PIXEL -> "Pixel LCD"
+        StampFontStyle.CLEAN_SANS -> "Hardware Sans"
+    }
+
+    fun stampPositionLabel(position: StampPosition): String = when (position) {
+        StampPosition.BOTTOM_RIGHT -> "Bottom Right"
+        StampPosition.BOTTOM_LEFT -> "Bottom Left"
+        StampPosition.TOP_RIGHT -> "Top Right"
+        StampPosition.TOP_LEFT -> "Top Left"
+    }
+
+    fun jpegQualityLabel(quality: Int): String = "${
+        quality.coerceIn(
+            UserSettingsSnapshot.MIN_JPEG_QUALITY,
+            UserSettingsSnapshot.MAX_JPEG_QUALITY
+        )
+    }%"
 }

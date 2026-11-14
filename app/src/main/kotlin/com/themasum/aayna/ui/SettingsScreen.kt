@@ -43,6 +43,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,30 +51,18 @@ import com.themasum.aayna.BuildConfig
 import com.themasum.aayna.core.model.CaptureStorageMode
 import com.themasum.aayna.core.model.DateStampFormatter
 import com.themasum.aayna.core.model.ResolutionPreset
+import com.themasum.aayna.core.model.StampFontStyle
 import com.themasum.aayna.core.model.StampFormat
+import com.themasum.aayna.core.model.StampPosition
 import com.themasum.aayna.core.model.StampStyle
 import com.themasum.aayna.core.model.UserSettingsSnapshot
 import com.themasum.aayna.core.storage.AaynaPreferencesRepository
 import com.themasum.aayna.core.storage.AaynaSoundEngine
 import com.themasum.aayna.ui.theme.AaynaColors
+import com.themasum.aayna.ui.theme.AaynaFonts
 import java.time.LocalDate
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
-
-private val selectableStampFormats =
-    listOf(
-        StampFormat.SHORT_YY_MM_DD,
-        StampFormat.DOT_YYYY_MM_DD,
-        StampFormat.EURO_DD_MM_YY
-    )
-
-private val selectableStampColors =
-    listOf(
-        StampStyle.DOT_MATRIX_AMBER,
-        StampStyle.CLASSIC_RED,
-        StampStyle.SEVEN_SEGMENT_EMERALD,
-        StampStyle.CLEAN_WHITE
-    )
 
 private val rollCapacities = listOf(24, 36)
 
@@ -135,35 +124,38 @@ fun SettingsScreen(
                     )
                 }
 
-                if (settings.storageMode == CaptureStorageMode.ANALOG_DEVELOPING_RITUAL) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "FILM ROLL CAPACITY",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = AaynaColors.MutedText
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rollCapacities.forEach { capacity ->
-                            HardwareChip(
-                                label = "$capacity EXP",
-                                selected = settings.rollCapacity == capacity,
-                                onClick = {
-                                    feedbackTick()
-                                    scope.launch { preferencesRepository.setRollCapacity(capacity) }
-                                },
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text =
+                    if (settings.storageMode == CaptureStorageMode.ANALOG_DEVELOPING_RITUAL) {
+                        "FILM ROLL CAPACITY"
+                    } else {
+                        "FILM ROLL CAPACITY (ANALOG RITUAL)"
+                    },
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AaynaColors.MutedText
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rollCapacities.forEach { capacity ->
+                        HardwareChip(
+                            label = "$capacity EXP",
+                            selected = settings.rollCapacity == capacity,
+                            onClick = {
+                                feedbackTick()
+                                scope.launch { preferencesRepository.setRollCapacity(capacity) }
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
 
                 HorizontalDivider(color = AaynaColors.MetallicBorder)
 
                 ConsoleSwitchRow(
-                    title = "Dual-Save Original",
+                    title = "Dual-Save Clean Negative",
                     subtitle = "Save clean pre-grade original alongside stylized shot.",
                     checked = settings.dualSaveEnabled,
                     onCheckedChange = { enabled ->
@@ -173,7 +165,12 @@ fun SettingsScreen(
                 )
             }
 
-            ConsoleSection(title = "OUTPUT RESOLUTION") {
+            ConsoleSection(title = "CAMERA & EXPORT PIPELINE") {
+                Text(
+                    text = "OUTPUT RESOLUTION",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AaynaColors.MutedText
+                )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -190,6 +187,68 @@ fun SettingsScreen(
                         )
                     }
                 }
+
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "JPEG EXPORT QUALITY",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AaynaColors.MutedText
+                        )
+                        Text(
+                            text = SettingsLabelFormatter.jpegQualityLabel(settings.jpegQuality),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontFamily = AaynaFonts.LedSevenSegment,
+                            color = AaynaColors.AmberLed
+                        )
+                    }
+                    val minQ = UserSettingsSnapshot.MIN_JPEG_QUALITY
+                    val maxQ = UserSettingsSnapshot.MAX_JPEG_QUALITY
+                    Slider(
+                        value = settings.clampedJpegQuality().toFloat(),
+                        onValueChange = { quality ->
+                            scope.launch {
+                                preferencesRepository.setJpegQuality(quality.roundToInt())
+                            }
+                        },
+                        valueRange = minQ.toFloat()..maxQ.toFloat(),
+                        steps = maxQ - minQ - 1,
+                        colors =
+                        SliderDefaults.colors(
+                            thumbColor = AaynaColors.AmberLed,
+                            activeTrackColor = AaynaColors.AmberLed,
+                            inactiveTrackColor = AaynaColors.MetallicBorder
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = AaynaColors.MetallicBorder)
+
+                ConsoleSwitchRow(
+                    title = "Front Camera Mirror",
+                    subtitle = "Horizontally flip front-facing captures to match viewfinder preview.",
+                    checked = settings.isFrontMirrorEnabled,
+                    onCheckedChange = { enabled ->
+                        feedbackTick()
+                        scope.launch { preferencesRepository.setFrontMirrorEnabled(enabled) }
+                    }
+                )
+
+                HorizontalDivider(color = AaynaColors.MetallicBorder)
+
+                ConsoleSwitchRow(
+                    title = "Hardware AE Compatibility Mode",
+                    subtitle = "Disable manual AE_MODE_OFF override and clamp EV steps on quirky HALs.",
+                    checked = settings.useHardwareAeCompatibility,
+                    onCheckedChange = { enabled ->
+                        feedbackTick()
+                        scope.launch { preferencesRepository.setHardwareAeCompatibility(enabled) }
+                    }
+                )
             }
 
             ConsoleSection(title = "DATE STAMP") {
@@ -199,40 +258,47 @@ fun SettingsScreen(
                             date = LocalDate.now(),
                             format = settings.stampFormat,
                             useEraYearOffset = settings.useEraYearOffset,
-                            eraYear = 2004
+                            eraYear = 2004,
+                            customText = if (settings.stampFormat == StampFormat.CUSTOM) "AAYNA '04" else ""
                         )
                     }
                 StampLedPreview(
                     text = previewText,
                     colorHex = settings.stampColor.hexColor,
+                    fontFamily = AaynaFonts.forStampFontStyle(settings.stampFontStyle),
+                    position = settings.stampPosition,
                     glowStrength = settings.stampGlow
                 )
 
                 Text(
-                    text = "FORMAT",
+                    text = "DATE FORMAT",
                     style = MaterialTheme.typography.labelMedium,
                     color = AaynaColors.MutedText
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    selectableStampFormats.forEach { format ->
-                        HardwareChip(
-                            label = SettingsLabelFormatter.stampFormatLabel(format),
-                            selected = settings.stampFormat == format,
-                            onClick = {
-                                feedbackTick()
-                                scope.launch { preferencesRepository.setStampFormat(format) }
-                            },
-                            modifier = Modifier.weight(1f)
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StampFormat.entries.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { format ->
+                                HardwareChip(
+                                    label = SettingsLabelFormatter.stampFormatLabel(format),
+                                    selected = settings.stampFormat == format,
+                                    onClick = {
+                                        feedbackTick()
+                                        scope.launch { preferencesRepository.setStampFormat(format) }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
                     }
                 }
 
                 ConsoleSwitchRow(
                     title = "Era-Year Offset",
-                    subtitle = "Use camera's nostalgic era year instead of today's real year.",
+                    subtitle = "Use camera's nostalgic era year instead of today's real date.",
                     checked = settings.useEraYearOffset,
                     onCheckedChange = { enabled ->
                         feedbackTick()
@@ -241,12 +307,68 @@ fun SettingsScreen(
                 )
 
                 Text(
+                    text = "STAMP FONT",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AaynaColors.MutedText
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StampFontStyle.entries.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { fontStyle ->
+                                HardwareChip(
+                                    label = SettingsLabelFormatter.stampFontLabel(fontStyle),
+                                    selected = settings.stampFontStyle == fontStyle,
+                                    fontFamily = AaynaFonts.forStampFontStyle(fontStyle),
+                                    onClick = {
+                                        feedbackTick()
+                                        scope.launch { preferencesRepository.setStampFontStyle(fontStyle) }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+
+                Text(
+                    text = "STAMP POSITION",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = AaynaColors.MutedText
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StampPosition.entries.chunked(2).forEach { rowItems ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowItems.forEach { position ->
+                                HardwareChip(
+                                    label = SettingsLabelFormatter.stampPositionLabel(position),
+                                    selected = settings.stampPosition == position,
+                                    onClick = {
+                                        feedbackTick()
+                                        scope.launch { preferencesRepository.setStampPosition(position) }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Text(
                     text = "LED COLOR",
                     style = MaterialTheme.typography.labelMedium,
                     color = AaynaColors.MutedText
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    selectableStampColors.chunked(2).forEach { rowItems ->
+                    StampStyle.entries.chunked(2).forEach { rowItems ->
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -262,6 +384,9 @@ fun SettingsScreen(
                                     },
                                     modifier = Modifier.weight(1f)
                                 )
+                            }
+                            if (rowItems.size == 1) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
                     }
@@ -281,6 +406,7 @@ fun SettingsScreen(
                         Text(
                             text = "${(settings.stampGlow * 100f).roundToInt()}%",
                             style = MaterialTheme.typography.labelMedium,
+                            fontFamily = AaynaFonts.LedSevenSegment,
                             color = AaynaColors.AmberLed
                         )
                     }
@@ -327,7 +453,7 @@ fun SettingsScreen(
                 )
                 HorizontalDivider(color = AaynaColors.MetallicBorder)
                 ConsoleSwitchRow(
-                    title = "Default Rule-of-Thirds Grid",
+                    title = "Default Composition Grid",
                     subtitle = "Show 3x3 framing reticle on viewfinder startup.",
                     checked = settings.gridEnabled,
                     onCheckedChange = { enabled ->
@@ -353,7 +479,7 @@ fun SettingsScreen(
                     )
                 ) {
                     Text(
-                        text = "ON-DEVICE CAMERA2 & GL DIAGNOSTICS",
+                        text = "ON-DEVICE CAMERA2, QUIRKS & GL DIAGNOSTICS",
                         style = MaterialTheme.typography.labelMedium,
                         modifier = Modifier.padding(vertical = 6.dp)
                     )
@@ -362,6 +488,7 @@ fun SettingsScreen(
                 Text(
                     text = "AAYNA OPTICAL CONSOLE • v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
                     style = MaterialTheme.typography.labelMedium,
+                    fontFamily = AaynaFonts.LedSevenSegment,
                     color = AaynaColors.MutedText
                 )
             }
@@ -468,7 +595,13 @@ private fun StorageModeCard(title: String, subtitle: String, selected: Boolean, 
 }
 
 @Composable
-private fun HardwareChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun HardwareChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fontFamily: FontFamily = AaynaFonts.HardwareCondensed
+) {
     val borderColor = if (selected) AaynaColors.AmberLed else AaynaColors.MetallicBorder
     val bgColor = if (selected) AaynaColors.CharcoalElevated else AaynaColors.CharcoalBg
 
@@ -485,8 +618,10 @@ private fun HardwareChip(label: String, selected: Boolean, onClick: () -> Unit, 
         Text(
             text = label,
             style = MaterialTheme.typography.labelMedium,
+            fontFamily = fontFamily,
             color = if (selected) AaynaColors.AmberLed else AaynaColors.SilverText,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
@@ -524,27 +659,43 @@ private fun StampColorChip(
             text = label,
             style = MaterialTheme.typography.labelMedium,
             color = if (selected) AaynaColors.SilverText else AaynaColors.MutedText,
-            maxLines = 1
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
 
 @Composable
-private fun StampLedPreview(text: String, colorHex: String, glowStrength: Float) {
+private fun StampLedPreview(
+    text: String,
+    colorHex: String,
+    fontFamily: FontFamily,
+    position: StampPosition,
+    glowStrength: Float
+) {
     val ledColor = parseHexColor(colorHex)
+    val alignment =
+        when (position) {
+            StampPosition.TOP_LEFT -> Alignment.TopStart
+            StampPosition.TOP_RIGHT -> Alignment.TopEnd
+            StampPosition.BOTTOM_LEFT -> Alignment.BottomStart
+            StampPosition.BOTTOM_RIGHT -> Alignment.BottomEnd
+        }
+
     Box(
         modifier =
         Modifier
             .fillMaxWidth()
+            .height(68.dp)
             .clip(RoundedCornerShape(6.dp))
-            .background(Color(0xFF0B0C0E))
+            .background(AaynaColors.CharcoalRecessed)
             .border(1.dp, AaynaColors.MetallicBorder, RoundedCornerShape(6.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        contentAlignment = Alignment.CenterEnd
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        contentAlignment = alignment
     ) {
         Text(
             text = text,
-            fontFamily = FontFamily.Monospace,
+            fontFamily = fontFamily,
             fontWeight = FontWeight.Bold,
             fontSize = 18.sp,
             letterSpacing = 2.sp,
