@@ -53,8 +53,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '9.3.1'
 
       - name: Make gradlew executable
         run: chmod +x gradlew
@@ -109,8 +107,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
-        with:
-          gradle-version: '9.3.1'
 
       - name: Make gradlew executable
         run: chmod +x gradlew
