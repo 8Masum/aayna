@@ -117,11 +117,24 @@ fun ViewfinderRoute(
         )
     }
     var permissionRequestedOnce by remember { mutableStateOf(false) }
+    var audioPermissionPromptedInSession by remember { mutableStateOf(false) }
+    var pendingVideoShutterAfterAudioPrompt by remember { mutableStateOf(false) }
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
             hasCameraPermission = granted
             if (!granted) {
                 logger.logWarn("Viewfinder", "CAMERA permission denied by user")
+            }
+        }
+    val audioPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (!granted) {
+                logger.logWarn("Viewfinder", "RECORD_AUDIO permission denied; falling back to silent video")
+                viewModel.showBanner("Mic denied — recording video without audio")
+            }
+            if (pendingVideoShutterAfterAudioPrompt) {
+                pendingVideoShutterAfterAudioPrompt = false
+                viewModel.onShutterPressed(hasCameraPermission)
             }
         }
 
@@ -173,12 +186,21 @@ fun ViewfinderRoute(
     DisposableEffect(lifecycleOwner, surfaceProcessor) {
         val observer =
             LifecycleEventObserver { _, event ->
-                if (surfaceProcessor == null) {
-                    when (event) {
-                        Lifecycle.Event.ON_RESUME -> glSurfaceViewRef.value?.onResume()
-                        Lifecycle.Event.ON_PAUSE -> glSurfaceViewRef.value?.onPause()
-                        else -> Unit
+                when (event) {
+                    Lifecycle.Event.ON_RESUME -> {
+                        hasCameraPermission =
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                            PackageManager.PERMISSION_GRANTED
+                        if (surfaceProcessor == null) {
+                            glSurfaceViewRef.value?.onResume()
+                        }
                     }
+                    Lifecycle.Event.ON_PAUSE -> {
+                        if (surfaceProcessor == null) {
+                            glSurfaceViewRef.value?.onPause()
+                        }
+                    }
+                    else -> Unit
                 }
             }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -265,6 +287,7 @@ fun ViewfinderRoute(
         readySurfaceTexture,
         uiState.isFrontCamera,
         uiState.activeCamera.supportsVideo,
+        uiState.isVideoMode,
         uiState.opticalSettings.aspectRatio,
         uiState.settings.useHardwareAeCompatibility
     ) {
@@ -282,6 +305,7 @@ fun ViewfinderRoute(
                     enableVideoCapture = uiState.activeCamera.supportsVideo,
                     preferCompatPreview = true,
                     useHardwareAeCompatibility = uiState.settings.useHardwareAeCompatibility,
+                    preferVideoMode = uiState.isVideoMode,
                     onEffectError = { err ->
                         logger.logWarn("Viewfinder", "CameraEffect fallback triggered", err)
                     }
@@ -446,11 +470,41 @@ fun ViewfinderRoute(
                     onOpenGallery = onOpenGallery,
                     onShutterClick = {
                         triggerShutterHaptic()
-                        viewModel.onShutterPressed(hasCameraPermission)
+                        val captureKind =
+                            ViewfinderStateReducer.resolveCaptureKind(
+                                profile = uiState.activeCamera,
+                                isVideoMode = uiState.isVideoMode
+                            )
+                        val audioGranted =
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                PackageManager.PERMISSION_GRANTED
+                        if (hasCameraPermission &&
+                            !uiState.isRecordingVideo &&
+                            !uiState.isCapturing &&
+                            captureKind == CaptureKind.VIDEO &&
+                            !audioGranted &&
+                            !audioPermissionPromptedInSession
+                        ) {
+                            audioPermissionPromptedInSession = true
+                            pendingVideoShutterAfterAudioPrompt = true
+                            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            pendingVideoShutterAfterAudioPrompt = false
+                            viewModel.onShutterPressed(hasCameraPermission)
+                        }
                     },
                     onToggleVideoMode = { video ->
                         triggerDialFeedback()
                         viewModel.toggleVideoMode(video)
+                        if (video && uiState.activeCamera.supportsVideo) {
+                            val audioGranted =
+                                ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+                                    PackageManager.PERMISSION_GRANTED
+                            if (!audioGranted && !audioPermissionPromptedInSession) {
+                                audioPermissionPromptedInSession = true
+                                audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
                     },
                     onOpenPanel = { panel ->
                         triggerDialFeedback()
@@ -630,6 +684,7 @@ fun ViewfinderRoute(
                                 triggerDialFeedback()
                                 viewModel.setStampFormat(fmt)
                             },
+                            onCustomTextChange = viewModel::updateStampCustomText,
                             onToggleEraYear = {
                                 triggerDialFeedback()
                                 viewModel.toggleEraYearOffset()

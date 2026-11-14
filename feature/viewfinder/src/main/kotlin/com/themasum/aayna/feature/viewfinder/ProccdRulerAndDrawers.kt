@@ -26,6 +26,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Info
@@ -51,9 +52,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -840,14 +843,15 @@ internal fun ProccdFrameDrawer(
     modifier: Modifier = Modifier
 ) {
     val accent = parseHexColor(state.activeSkin.accentHex, Color(0xFF4CD4E8))
+    val selectableFrames = remember { ViewfinderStateReducer.singlePhotoFrameStyles() }
     ProccdOverlayDrawerContainer(
-        title = "FILM & PRINT FRAMES (${FrameBorderStyle.entries.size})",
+        title = "FILM & PRINT FRAMES (${selectableFrames.size})",
         accent = accent,
         onClose = onClose,
         modifier = modifier
     ) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(FrameBorderStyle.entries) { frame ->
+            items(selectableFrames) { frame ->
                 val selected = frame == state.opticalSettings.frameStyle
                 val label =
                     when (frame) {
@@ -894,6 +898,7 @@ internal fun ProccdStampDrawer(
     onSelectColor: (StampStyle) -> Unit,
     onSelectPosition: (StampPosition) -> Unit,
     onSelectFormat: (StampFormat) -> Unit,
+    onCustomTextChange: (String) -> Unit,
     onToggleEraYear: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
@@ -1021,7 +1026,7 @@ internal fun ProccdStampDrawer(
 
         DrawerChipRow(
             title = "FMT",
-            items = StampFormat.entries.filter { it != StampFormat.CUSTOM },
+            items = StampFormat.entries,
             selectedItem = state.stampConfig.format,
             labelOf = {
                 when (it) {
@@ -1034,6 +1039,57 @@ internal fun ProccdStampDrawer(
             accent = accent,
             onSelect = onSelectFormat
         )
+
+        if (state.stampConfig.format == StampFormat.CUSTOM) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "TEXT",
+                    color = Color(0xFF9CA3AF),
+                    fontSize = 10.sp,
+                    fontFamily = FontFamily.Monospace,
+                    modifier = Modifier.width(42.dp)
+                )
+                Box(
+                    modifier =
+                    Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF1E2129))
+                        .border(1.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    if (state.stampConfig.customText.isEmpty()) {
+                        Text(
+                            text = "AAYNA '04 (A-Z, 0-9, ' . : - /)",
+                            color = Color(0xFF6B7280),
+                            fontSize = 11.sp,
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    BasicTextField(
+                        value = state.stampConfig.customText,
+                        onValueChange = onCustomTextChange,
+                        singleLine = true,
+                        textStyle =
+                        TextStyle(
+                            color = Color(0xFFF3F4F6),
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        cursorBrush = SolidColor(accent),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
     }
 }
 

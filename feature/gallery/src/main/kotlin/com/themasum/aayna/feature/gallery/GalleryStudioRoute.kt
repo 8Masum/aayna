@@ -1,8 +1,8 @@
 package com.themasum.aayna.feature.gallery
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -58,12 +58,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.themasum.aayna.core.gl.AaynaPersistentGlEngine
+import com.themasum.aayna.core.gl.D3dMp4Config
+import com.themasum.aayna.core.gl.D3dMp4Encoder
+import com.themasum.aayna.core.gl.GlMath
 import com.themasum.aayna.core.gl.OffscreenGlExporter
 import com.themasum.aayna.core.gl.StudioGlPreviewRenderer
+import com.themasum.aayna.core.gl.VideoGlTranscoder
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.CaptureRecipe
 import com.themasum.aayna.core.model.DateStampFormatter
-import com.themasum.aayna.core.model.ExposureMath
 import com.themasum.aayna.core.model.FrameBorderStyle
 import com.themasum.aayna.core.model.MediaType
 import com.themasum.aayna.core.model.UserSettingsSnapshot
@@ -76,6 +80,7 @@ import com.themasum.aayna.core.storage.NegativeRepository
 import com.themasum.aayna.core.storage.ThumbnailMemoryCache
 import com.themasum.aayna.core.storage.db.FilmRollEntity
 import com.themasum.aayna.core.storage.db.NegativeEntity
+import java.io.File
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
@@ -86,13 +91,27 @@ private const val TAG = "GalleryStudio"
 
 private data class StudioEditorSession(
     val originalBitmap: Bitmap,
-    val workingBitmap: Bitmap,
-    val recipe: CaptureRecipe,
+    val undoState: StudioUndoState,
     val editingNegativeId: String?,
-    val editingThumbnailPath: String = "",
-    val selectedCropPreset: StudioCropPreset = StudioCropPreset.ORIGINAL,
-    val grainBoost: Float = 0f
-)
+    val editingThumbnailPath: String = ""
+) {
+    val recipe: CaptureRecipe get() = undoState.current
+    val canUndo: Boolean get() = undoState.canUndo
+    val grainBoost: Float get() = recipe.opticalSettings.grainBoost
+    val selectedCropPreset: StudioCropPreset
+        get() {
+            val (rotW, rotH) =
+                GlMath.computeRotatedDimensions(
+                    width = originalBitmap.width,
+                    height = originalBitmap.height,
+                    rotationDegrees = recipe.opticalSettings.rotationDegrees
+                )
+            return GalleryRecipeReducer.resolveCropPreset(
+                opticalSettings = recipe.opticalSettings,
+                isSourcePortrait = rotH > rotW
+            )
+        }
+}
 
 private data class D3dSession(
     val frames: List<Bitmap>,
@@ -119,7 +138,8 @@ fun GalleryStudioRoute(
     dotMatrixFontFamily: FontFamily = FontFamily.Monospace,
     vcrOsdFontFamily: FontFamily = FontFamily.Monospace,
     pixelFontFamily: FontFamily = FontFamily.Monospace,
-    condensedFontFamily: FontFamily = FontFamily.Monospace
+    condensedFontFamily: FontFamily = FontFamily.Monospace,
+    persistentGlEngine: AaynaPersistentGlEngine? = null
 ) {
     val fontSet =
         remember(ledFontFamily, dotMatrixFontFamily, vcrOsdFontFamily, pixelFontFamily, condensedFontFamily) {
@@ -145,6 +165,7 @@ fun GalleryStudioRoute(
             logger = logger,
             studioGlRenderer = studioGlRenderer,
             thumbnailCache = effectiveThumbnailCache,
+            persistentGlEngine = persistentGlEngine,
             modifier = modifier
         )
     }
@@ -162,6 +183,7 @@ private fun GalleryStudioContent(
     logger: AaynaLogger,
     studioGlRenderer: StudioGlPreviewRenderer?,
     thumbnailCache: ThumbnailMemoryCache,
+    persistentGlEngine: AaynaPersistentGlEngine?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -211,6 +233,7 @@ private fun GalleryStudioContent(
     var showImportDialog by remember { mutableStateOf(false) }
     var isLoadingSource by remember { mutableStateOf(false) }
     var isBusyExport by remember { mutableStateOf(false) }
+    var videoExportProgress by remember { mutableStateOf<Float?>(null) }
 
     val filteredNegatives =
         remember(selectedTab, activeNegatives, trashedNegatives) {
@@ -240,8 +263,7 @@ private fun GalleryStudioContent(
                         )
                     StudioEditorSession(
                         originalBitmap = bitmap,
-                        workingBitmap = bitmap,
-                        recipe = initialRecipe,
+                        undoState = StudioUndoState(initialRecipe),
                         editingNegativeId = null
                     )
                 }.onSuccess { session ->
@@ -275,8 +297,7 @@ private fun GalleryStudioContent(
                             )
                         StudioEditorSession(
                             originalBitmap = bitmap,
-                            workingBitmap = bitmap,
-                            recipe = initialRecipe,
+                            undoState = StudioUndoState(initialRecipe),
                             editingNegativeId = null
                         )
                     }.onSuccess { session ->
@@ -339,8 +360,7 @@ private fun GalleryStudioContent(
                 val recipe = entity.toCaptureRecipe()
                 StudioEditorSession(
                     originalBitmap = bitmap,
-                    workingBitmap = bitmap,
-                    recipe = recipe,
+                    undoState = StudioUndoState(recipe),
                     editingNegativeId = entity.recipeId,
                     editingThumbnailPath = entity.thumbnailPath
                 )
@@ -404,12 +424,11 @@ private fun GalleryStudioContent(
                 eraYear = profile.eraYearOffset,
                 customText = recipe.stampConfig.customText
             )
-        val gains =
-            ExposureMath.computeShaderFallbackGains(
-                hasManualSensor = false,
-                ev = recipe.opticalSettings.evCompensation,
-                iso = recipe.opticalSettings.iso,
-                shutterNs = recipe.opticalSettings.shutterSpeedNs
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = recipe,
+                profile = profile,
+                stampText = stampText
             )
         val rendered =
             try {
@@ -418,7 +437,8 @@ private fun GalleryStudioContent(
                     profile = profile,
                     recipe = recipe,
                     stampText = stampText,
-                    fallbackGains = gains
+                    fallbackGains = params.fallbackGains,
+                    skipStamp = params.skipStamp
                 )
             } finally {
                 bitmap.recycle()
@@ -460,12 +480,11 @@ private fun GalleryStudioContent(
                 eraYear = profile.eraYearOffset,
                 customText = recipe.stampConfig.customText
             )
-        val gains =
-            ExposureMath.computeShaderFallbackGains(
-                hasManualSensor = false,
-                ev = recipe.opticalSettings.evCompensation,
-                iso = recipe.opticalSettings.iso,
-                shutterNs = recipe.opticalSettings.shutterSpeedNs
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = recipe,
+                profile = profile,
+                stampText = stampText
             )
         val graded =
             try {
@@ -475,8 +494,9 @@ private fun GalleryStudioContent(
                         profile = profile,
                         recipe = recipe,
                         stampText = stampText,
-                        fallbackGains = gains,
-                        maxEdgeOverride = 720
+                        fallbackGains = params.fallbackGains,
+                        maxEdgeOverride = 720,
+                        skipStamp = params.skipStamp
                     )
                 }
             } finally {
@@ -529,7 +549,7 @@ private fun GalleryStudioContent(
             when {
                 currentEditor != null -> {
                     GalleryStudioEditor(
-                        sourceBitmap = currentEditor.workingBitmap,
+                        sourceBitmap = currentEditor.originalBitmap,
                         recipe = currentEditor.recipe,
                         isSavedNegative = currentEditor.editingNegativeId != null,
                         isExporting = isBusyExport,
@@ -539,44 +559,29 @@ private fun GalleryStudioContent(
                         favoriteCameraIds = favoriteCameraIds,
                         selectedCropPreset = currentEditor.selectedCropPreset,
                         grainBoost = currentEditor.grainBoost,
+                        canUndo = currentEditor.canUndo,
+                        onUndo = {
+                            if (currentEditor.canUndo) {
+                                editorSession = currentEditor.copy(undoState = currentEditor.undoState.undo())
+                            }
+                        },
                         onGrainBoostChange = { boost ->
-                            editorSession = currentEditor.copy(grainBoost = boost.coerceIn(0f, 1f))
+                            val nextRecipe = GalleryRecipeReducer.updateGrainBoost(currentEditor.recipe, boost)
+                            editorSession = currentEditor.copy(undoState = currentEditor.undoState.push(nextRecipe))
                         },
                         onSelectCropPreset = { preset ->
                             val nextRecipe = GalleryRecipeReducer.updateCropPreset(currentEditor.recipe, preset)
-                            val nextWorking =
-                                if (preset.exactRatio == null) {
-                                    currentEditor.originalBitmap
-                                } else {
-                                    GalleryImageDecoder.cropBitmapToAspect(
-                                        currentEditor.originalBitmap,
-                                        preset.exactRatio
-                                    )
-                                }
-                            editorSession =
-                                currentEditor.copy(
-                                    workingBitmap = nextWorking,
-                                    recipe = nextRecipe,
-                                    selectedCropPreset = preset
-                                )
+                            editorSession = currentEditor.copy(undoState = currentEditor.undoState.push(nextRecipe))
                         },
                         onRotate90Cw = {
-                            val rotatedOriginal = GalleryImageDecoder.rotateBitmap90Cw(currentEditor.originalBitmap)
-                            val nextWorking =
-                                currentEditor.selectedCropPreset.exactRatio?.let { ratio ->
-                                    GalleryImageDecoder.cropBitmapToAspect(rotatedOriginal, ratio)
-                                } ?: rotatedOriginal
-                            editorSession =
-                                currentEditor.copy(
-                                    originalBitmap = rotatedOriginal,
-                                    workingBitmap = nextWorking
-                                )
+                            val nextRecipe = GalleryRecipeReducer.rotate90Cw(currentEditor.recipe)
+                            editorSession = currentEditor.copy(undoState = currentEditor.undoState.push(nextRecipe))
                         },
                         onToggleFavoriteCamera = { camId ->
                             scope.launch { preferencesRepository.toggleFavoriteCamera(camId) }
                         },
                         onRecipeChange = { updated ->
-                            editorSession = currentEditor.copy(recipe = updated)
+                            editorSession = currentEditor.copy(undoState = currentEditor.undoState.push(updated))
                         },
                         onDialTick = { soundEngine.playDialTick(settings.sfxEnabled) },
                         onSaveEdits = {
@@ -603,11 +608,12 @@ private fun GalleryStudioContent(
                                 runCatching {
                                     val fullGraded =
                                         offscreenExporter.renderBitmap(
-                                            sourceBitmap = currentEditor.workingBitmap,
+                                            sourceBitmap = currentEditor.originalBitmap,
                                             profile = profile,
                                             recipe = recipe,
                                             stampText = stampText,
-                                            fallbackGains = params.fallbackGains
+                                            fallbackGains = params.fallbackGains,
+                                            skipStamp = params.skipStamp
                                         )
                                     val gradedThumbnail =
                                         try {
@@ -615,30 +621,34 @@ private fun GalleryStudioContent(
                                         } finally {
                                             fullGraded.recycle()
                                         }
-                                    val negId = currentEditor.editingNegativeId
-                                    if (negId != null) {
-                                        if (currentEditor.editingThumbnailPath.isNotBlank()) {
-                                            thumbnailCache.invalidatePath(currentEditor.editingThumbnailPath)
+                                    try {
+                                        val negId = currentEditor.editingNegativeId
+                                        if (negId != null) {
+                                            if (currentEditor.editingThumbnailPath.isNotBlank()) {
+                                                thumbnailCache.invalidatePath(currentEditor.editingThumbnailPath)
+                                            }
+                                            val updatedThumbPath =
+                                                negativeRepository.updateRecipeAndThumbnail(
+                                                    recipe = recipe,
+                                                    gradedThumbnailBitmap = gradedThumbnail
+                                                )
+                                            editorSession =
+                                                currentEditor.copy(editingThumbnailPath = updatedThumbPath)
+                                        } else {
+                                            val saved =
+                                                negativeRepository.saveNegative(
+                                                    cleanBitmap = currentEditor.originalBitmap,
+                                                    thumbnailBitmap = gradedThumbnail,
+                                                    recipe = recipe
+                                                )
+                                            editorSession =
+                                                currentEditor.copy(
+                                                    editingNegativeId = saved.recipeId,
+                                                    editingThumbnailPath = saved.thumbnailPath
+                                                )
                                         }
-                                        val updatedThumbPath =
-                                            negativeRepository.updateRecipeAndThumbnail(
-                                                recipe = recipe,
-                                                gradedThumbnailBitmap = gradedThumbnail
-                                            )
-                                        editorSession =
-                                            currentEditor.copy(editingThumbnailPath = updatedThumbPath)
-                                    } else {
-                                        val saved =
-                                            negativeRepository.saveNegative(
-                                                cleanBitmap = currentEditor.originalBitmap,
-                                                thumbnailBitmap = gradedThumbnail,
-                                                recipe = recipe
-                                            )
-                                        editorSession =
-                                            currentEditor.copy(
-                                                editingNegativeId = saved.recipeId,
-                                                editingThumbnailPath = saved.thumbnailPath
-                                            )
+                                    } finally {
+                                        gradedThumbnail.recycle()
                                     }
                                 }.onSuccess {
                                     soundEngine.playFilmWind(settings.sfxEnabled)
@@ -678,11 +688,12 @@ private fun GalleryStudioContent(
                                 runCatching {
                                     val fullBitmap =
                                         offscreenExporter.renderBitmap(
-                                            sourceBitmap = currentEditor.workingBitmap,
+                                            sourceBitmap = currentEditor.originalBitmap,
                                             profile = profile,
                                             recipe = recipe,
                                             stampText = stampText,
-                                            fallbackGains = params.fallbackGains
+                                            fallbackGains = params.fallbackGains,
+                                            skipStamp = params.skipStamp
                                         )
                                     val exportedUri =
                                         try {
@@ -738,18 +749,35 @@ private fun GalleryStudioContent(
                                             burstFrameCount = currentD3d.frames.size
                                         )
                                     val thumb = GalleryImageDecoder.createScaledThumbnail(activeFrames.first())
-                                    GalleryImageDecoder.saveD3dFramesToDir(
-                                        filesDir = context.filesDir,
-                                        recipeId = recipe.recipeId,
-                                        frames = currentD3d.frames
-                                    )
-                                    val saved =
-                                        negativeRepository.saveNegative(
-                                            cleanBitmap = currentD3d.frames.first(),
-                                            thumbnailBitmap = thumb,
-                                            recipe = recipe
-                                        )
-                                    d3dSession = currentD3d.copy(editingNegativeId = saved.recipeId, recipe = recipe)
+                                    try {
+                                        val negId = currentD3d.editingNegativeId
+                                        if (negId != null) {
+                                            negativeRepository.updateRecipeAndThumbnail(
+                                                recipe = recipe,
+                                                gradedThumbnailBitmap = thumb
+                                            )
+                                            d3dSession = currentD3d.copy(recipe = recipe)
+                                        } else {
+                                            GalleryImageDecoder.saveD3dFramesToDir(
+                                                filesDir = context.filesDir,
+                                                recipeId = recipe.recipeId,
+                                                frames = currentD3d.frames
+                                            )
+                                            val saved =
+                                                negativeRepository.saveNegative(
+                                                    cleanBitmap = currentD3d.frames.first(),
+                                                    thumbnailBitmap = thumb,
+                                                    recipe = recipe
+                                                )
+                                            d3dSession =
+                                                currentD3d.copy(
+                                                    editingNegativeId = saved.recipeId,
+                                                    recipe = recipe
+                                                )
+                                        }
+                                    } finally {
+                                        thumb.recycle()
+                                    }
                                 }.onSuccess {
                                     soundEngine.playFilmWind(settings.sfxEnabled)
                                     snackbarHostState.showSnackbar("D3D Wigglegram saved to Works")
@@ -788,6 +816,74 @@ private fun GalleryStudioContent(
                                 isBusyExport = false
                             }
                         },
+                        onExportMp4 = { delayMs, pingPong ->
+                            if (isBusyExport || currentD3d.frames.isEmpty()) return@D3dWigglegramStudioScreen
+                            scope.launch {
+                                isBusyExport = true
+                                val recipe = currentD3d.recipe
+                                val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+                                val stampText =
+                                    DateStampFormatter.format(
+                                        epochMillis = recipe.capturedAtEpochMs,
+                                        format = recipe.stampConfig.format,
+                                        useEraYearOffset = recipe.stampConfig.useEraYearOffset,
+                                        eraYear = profile.eraYearOffset,
+                                        customText = recipe.stampConfig.customText
+                                    )
+                                val params =
+                                    GalleryRecipeReducer.buildGlRenderParams(
+                                        recipe = recipe,
+                                        profile = profile,
+                                        stampText = stampText
+                                    )
+                                val gradedFrames = mutableListOf<Bitmap>()
+                                var tempMp4: File? = null
+                                runCatching {
+                                    currentD3d.frames.forEach { frame ->
+                                        gradedFrames +=
+                                            offscreenExporter.renderBitmap(
+                                                sourceBitmap = frame,
+                                                profile = profile,
+                                                recipe = recipe,
+                                                stampText = stampText,
+                                                fallbackGains = params.fallbackGains,
+                                                maxEdgeOverride = D3dMp4Config.DEFAULT_MAX_EDGE_PX,
+                                                skipStamp = params.skipStamp
+                                            )
+                                    }
+                                    val outFile = File.createTempFile("aayna_d3d_", ".mp4", context.cacheDir)
+                                    tempMp4 = outFile
+                                    withPersistentGlEngine(persistentGlEngine, context) { glEngine ->
+                                        D3dMp4Encoder(glEngine).encode(
+                                            frames = gradedFrames,
+                                            outputFile = outFile,
+                                            frameDelayMs = delayMs,
+                                            pingPong = pingPong
+                                        )
+                                    }
+                                    mediaStoreExporter.saveVideoFileToGallery(
+                                        sourceFile = outFile,
+                                        profile = profile,
+                                        capturedAtMs = recipe.capturedAtEpochMs,
+                                        fileSuffix = "d3d"
+                                    )
+                                }.onSuccess { uri ->
+                                    val negId = currentD3d.editingNegativeId
+                                    if (negId != null && uri != null) {
+                                        negativeRepository.updateExportedUri(negId, uri.toString())
+                                    }
+                                    soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("D3D MP4 exported to Movies/Aayna")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "D3D MP4 export failed", err)
+                                    snackbarHostState.showSnackbar("MP4 export failed: ${err.message ?: "Error"}")
+                                }.also {
+                                    gradedFrames.forEach { it.recycle() }
+                                    tempMp4?.delete()
+                                }
+                                isBusyExport = false
+                            }
+                        },
                         onBack = { d3dSession = null }
                     )
                 }
@@ -821,15 +917,20 @@ private fun GalleryStudioContent(
                                         currentBooth.recipe.copy(
                                             opticalSettings =
                                             currentBooth.recipe.opticalSettings.copy(
-                                                frameStyle = FrameBorderStyle.PHOTO_BOOTH_4STRIP
-                                            )
+                                                frameStyle = FrameBorderStyle.NONE
+                                            ),
+                                            isPreComposited = true
                                         )
                                     val thumb = GalleryImageDecoder.createScaledThumbnail(strip)
-                                    negativeRepository.saveNegative(
-                                        cleanBitmap = strip,
-                                        thumbnailBitmap = thumb,
-                                        recipe = recipe
-                                    )
+                                    try {
+                                        negativeRepository.saveNegative(
+                                            cleanBitmap = strip,
+                                            thumbnailBitmap = thumb,
+                                            recipe = recipe
+                                        )
+                                    } finally {
+                                        thumb.recycle()
+                                    }
                                 }.onSuccess {
                                     soundEngine.playFilmWind(settings.sfxEnabled)
                                     snackbarHostState.showSnackbar("Photo Booth 4-Strip saved to Works")
@@ -873,6 +974,8 @@ private fun GalleryStudioContent(
                         VideoDetailScreen(
                             entity = currentDetail,
                             thumbnailCache = thumbnailCache,
+                            isBusy = isBusyExport,
+                            exportProgress = videoExportProgress,
                             onBack = { detailEntity = null },
                             onPlayOffline = {
                                 val uriStr = currentDetail.mediaUri ?: currentDetail.exportedUri
@@ -882,10 +985,17 @@ private fun GalleryStudioContent(
                                     }
                                     return@VideoDetailScreen
                                 }
+                                val shareableUri = MediaStoreExporter.resolveShareableVideoUri(context, uriStr)
+                                if (shareableUri == null) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Video file is unavailable")
+                                    }
+                                    return@VideoDetailScreen
+                                }
                                 runCatching {
                                     val intent =
                                         Intent(Intent.ACTION_VIEW).apply {
-                                            setDataAndType(Uri.parse(uriStr), "video/mp4")
+                                            setDataAndType(shareableUri, "video/mp4")
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
                                     context.startActivity(intent)
@@ -903,11 +1013,18 @@ private fun GalleryStudioContent(
                                     }
                                     return@VideoDetailScreen
                                 }
+                                val shareableUri = MediaStoreExporter.resolveShareableVideoUri(context, uriStr)
+                                if (shareableUri == null) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Video file is unavailable")
+                                    }
+                                    return@VideoDetailScreen
+                                }
                                 runCatching {
                                     val shareIntent =
                                         Intent(Intent.ACTION_SEND).apply {
                                             type = "video/mp4"
-                                            putExtra(Intent.EXTRA_STREAM, Uri.parse(uriStr))
+                                            putExtra(Intent.EXTRA_STREAM, shareableUri)
                                             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                         }
                                     context.startActivity(Intent.createChooser(shareIntent, "Share Aayna Video"))
@@ -915,6 +1032,74 @@ private fun GalleryStudioContent(
                                     scope.launch {
                                         snackbarHostState.showSnackbar("Unable to share video")
                                     }
+                                }
+                            },
+                            onExportEditedMp4 = { editedRecipe, trimStartMs, trimEndMs ->
+                                if (isBusyExport) return@VideoDetailScreen
+                                val rawUri = currentDetail.mediaUri ?: currentDetail.exportedUri
+                                val sourceUri =
+                                    rawUri?.let { MediaStoreExporter.resolveShareableVideoUri(context, it) }
+                                if (sourceUri == null) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Source video file is unavailable")
+                                    }
+                                    return@VideoDetailScreen
+                                }
+                                scope.launch {
+                                    isBusyExport = true
+                                    videoExportProgress = 0f
+                                    val profile = CameraCatalog.findByIdOrDefault(editedRecipe.cameraId)
+                                    val stampText =
+                                        DateStampFormatter.format(
+                                            epochMillis = editedRecipe.capturedAtEpochMs,
+                                            format = editedRecipe.stampConfig.format,
+                                            useEraYearOffset = editedRecipe.stampConfig.useEraYearOffset,
+                                            eraYear = profile.eraYearOffset,
+                                            customText = editedRecipe.stampConfig.customText
+                                        )
+                                    val params =
+                                        GalleryRecipeReducer.buildGlRenderParams(
+                                            recipe = editedRecipe,
+                                            profile = profile,
+                                            stampText = stampText
+                                        )
+                                    var tempMp4: File? = null
+                                    runCatching {
+                                        val outFile = File.createTempFile("aayna_vid_edit_", ".mp4", context.cacheDir)
+                                        tempMp4 = outFile
+                                        withPersistentGlEngine(persistentGlEngine, context) { glEngine ->
+                                            VideoGlTranscoder(context, glEngine).transcode(
+                                                sourceUri = sourceUri,
+                                                outputFile = outFile,
+                                                params = params,
+                                                trimStartMs = trimStartMs,
+                                                trimEndMs = trimEndMs,
+                                                onProgress = { progress -> videoExportProgress = progress }
+                                            )
+                                        }
+                                        mediaStoreExporter.saveVideoFileToGallery(
+                                            sourceFile = outFile,
+                                            profile = profile,
+                                            capturedAtMs = System.currentTimeMillis(),
+                                            fileSuffix = "edit"
+                                        )
+                                    }.onSuccess { exportedUri ->
+                                        if (exportedUri != null) {
+                                            negativeRepository.updateExportedUri(
+                                                currentDetail.recipeId,
+                                                exportedUri.toString()
+                                            )
+                                        }
+                                        soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
+                                        snackbarHostState.showSnackbar("Edited MP4 exported to Movies/Aayna")
+                                    }.onFailure { err ->
+                                        logger.logError(TAG, "Video MP4 export failed", err)
+                                        snackbarHostState.showSnackbar("MP4 export failed: ${err.message ?: "Error"}")
+                                    }.also {
+                                        tempMp4?.delete()
+                                    }
+                                    videoExportProgress = null
+                                    isBusyExport = false
                                 }
                             },
                             onSaveCaption = { newCaption ->
@@ -1425,5 +1610,21 @@ private fun WorksTopHeader(
                 }
             }
         }
+    }
+}
+
+private suspend inline fun <T> withPersistentGlEngine(
+    sharedEngine: AaynaPersistentGlEngine?,
+    context: Context,
+    crossinline block: suspend (AaynaPersistentGlEngine) -> T
+): T {
+    if (sharedEngine != null && !sharedEngine.isReleased()) {
+        return block(sharedEngine)
+    }
+    val localEngine = AaynaPersistentGlEngine(context.assets)
+    return try {
+        block(localEngine)
+    } finally {
+        localEngine.close()
     }
 }

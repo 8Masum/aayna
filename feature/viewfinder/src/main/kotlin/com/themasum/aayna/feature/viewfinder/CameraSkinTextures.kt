@@ -15,14 +15,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
@@ -53,10 +48,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.themasum.aayna.core.model.CameraSkinSpec
 import com.themasum.aayna.core.model.ChassisMaterial
-import com.themasum.aayna.core.model.LcdTheme
 import com.themasum.aayna.core.model.ShutterStyle
 import com.themasum.aayna.core.model.SkinAccentMotif
-import com.themasum.aayna.core.model.WhiteBalancePreset
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -364,117 +357,6 @@ private fun DrawScope.drawAccentMotif(motif: SkinAccentMotif, secondary: Color, 
                 center = Offset(size.width - 16.dp.toPx(), 16.dp.toPx())
             )
         }
-    }
-}
-
-@Composable
-internal fun HardwareLcdStrip(
-    state: ViewfinderUiState,
-    ledFontFamily: FontFamily = FontFamily.Monospace,
-    dotMatrixFontFamily: FontFamily = FontFamily.Monospace,
-    modifier: Modifier = Modifier
-) {
-    val skin = state.activeSkin
-    val lcdBg = parseHexColor(skin.lcdBackgroundHex, Color(0xFF0B1E24))
-    val lcdFg = parseHexColor(skin.lcdForegroundHex, Color(0xFF62F0FF))
-    val borderColor = lcdFg.copy(alpha = 0.35f)
-    val isoLabel = state.opticalSettings.iso?.toString() ?: "AUTO"
-    val shutterLabel = ViewfinderStateReducer.formatShutterLabel(state.opticalSettings.shutterSpeedNs)
-    val evLabel = ViewfinderStateReducer.formatEvLabel(state.opticalSettings.evCompensation)
-    val wbLabel =
-        when (state.opticalSettings.whiteBalance) {
-            WhiteBalancePreset.AUTO -> "AWB"
-            WhiteBalancePreset.DAYLIGHT -> "DAY"
-            WhiteBalancePreset.CLOUDY -> "CLD"
-            WhiteBalancePreset.TUNGSTEN -> "TNG"
-            WhiteBalancePreset.FLUORESCENT -> "FLR"
-        }
-    val modeBadge = ViewfinderStateReducer.formatLcdModeBadge(state)
-    val lcdFont =
-        when (skin.lcdTheme) {
-            LcdTheme.EMERALD_SEVEN_SEG,
-            LcdTheme.AMBER_COUNTER,
-            LcdTheme.CLASSIC_RED_LED -> ledFontFamily
-            LcdTheme.CYAN_DOT_MATRIX,
-            LcdTheme.WARM_MONOCHROME,
-            LcdTheme.VCR_BLUE_OSD -> dotMatrixFontFamily
-        }
-
-    Row(
-        modifier =
-        modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(8.dp))
-            .background(lcdBg)
-            .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        LcdMetric(label = "ISO", value = isoLabel, fg = lcdFg, font = lcdFont)
-        LcdMetric(label = "SH", value = shutterLabel, fg = lcdFg, font = lcdFont)
-        LcdMetric(label = "EV", value = evLabel, fg = lcdFg, font = lcdFont)
-        LcdMetric(label = "WB", value = wbLabel, fg = lcdFg, font = lcdFont)
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier =
-                Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(lcdFg.copy(alpha = 0.16f))
-                    .border(1.dp, lcdFg.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    text = modeBadge,
-                    color = lcdFg,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = lcdFont
-                )
-            }
-            if (state.settings.dualSaveEnabled) {
-                Box(
-                    modifier =
-                    Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .background(lcdFg.copy(alpha = 0.24f))
-                        .padding(horizontal = 5.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "DUAL",
-                        color = lcdFg,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = lcdFont
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun LcdMetric(label: String, value: String, fg: Color, font: FontFamily) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = label,
-            color = fg.copy(alpha = 0.62f),
-            fontSize = 8.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = font,
-            lineHeight = 9.sp
-        )
-        Text(
-            text = value,
-            color = fg,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = font,
-            lineHeight = 13.sp
-        )
     }
 }
 

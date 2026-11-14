@@ -1,6 +1,7 @@
 package com.themasum.aayna.feature.gallery
 
 import android.graphics.Bitmap
+import android.widget.VideoView
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -43,6 +44,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.GifBox
+import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PhotoLibrary
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
@@ -61,15 +63,19 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.RangeSlider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -80,17 +86,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.themasum.aayna.core.gl.OffscreenGlExporter
+import com.themasum.aayna.core.gl.VideoTranscodeConfig
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.CaptureRecipe
 import com.themasum.aayna.core.model.DateStampFormatter
 import com.themasum.aayna.core.model.ExposureMath
 import com.themasum.aayna.core.model.FrameBorderStyle
 import com.themasum.aayna.core.model.MediaType
+import com.themasum.aayna.core.storage.MediaStoreExporter
 import com.themasum.aayna.core.storage.ThumbnailMemoryCache
 import com.themasum.aayna.core.storage.db.FilmRollEntity
 import com.themasum.aayna.core.storage.db.NegativeEntity
@@ -907,6 +917,16 @@ internal fun PhotoDetailScreen(
             }
     }
 
+    val displayCleanBitmap =
+        remember(cleanBitmap, recipe.opticalSettings.rotationDegrees) {
+            val src = cleanBitmap ?: return@remember null
+            if (recipe.opticalSettings.rotationDegrees == 0) {
+                src
+            } else {
+                GalleryImageDecoder.rotateBitmap(src, recipe.opticalSettings.rotationDegrees)
+            }
+        }
+
     val gradedBitmap by produceState<Bitmap?>(initialValue = null, cleanBitmap, recipe) {
         val src = cleanBitmap ?: return@produceState
         val stampText =
@@ -917,12 +937,11 @@ internal fun PhotoDetailScreen(
                 eraYear = profile.eraYearOffset,
                 customText = recipe.stampConfig.customText
             )
-        val gains =
-            ExposureMath.computeShaderFallbackGains(
-                hasManualSensor = false,
-                ev = recipe.opticalSettings.evCompensation,
-                iso = recipe.opticalSettings.iso,
-                shutterNs = recipe.opticalSettings.shutterSpeedNs
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = recipe,
+                profile = profile,
+                stampText = stampText
             )
         value =
             runCatching {
@@ -931,8 +950,9 @@ internal fun PhotoDetailScreen(
                     profile = profile,
                     recipe = recipe,
                     stampText = stampText,
-                    fallbackGains = gains,
-                    maxEdgeOverride = 1280
+                    fallbackGains = params.fallbackGains,
+                    maxEdgeOverride = 1280,
+                    skipStamp = params.skipStamp
                 )
             }.getOrNull()
     }
@@ -1041,7 +1061,7 @@ internal fun PhotoDetailScreen(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                val active = if (isHoldingClean) cleanBitmap else (gradedBitmap ?: cleanBitmap)
+                val active = if (isHoldingClean) displayCleanBitmap else (gradedBitmap ?: displayCleanBitmap)
                 if (active != null) {
                     Image(
                         bitmap = active.asImageBitmap(),
@@ -1203,6 +1223,7 @@ internal fun D3dWigglegramStudioScreen(
     onRecipeChange: (CaptureRecipe) -> Unit,
     onSaveToWorks: (List<Bitmap>) -> Unit,
     onExportLoopingGif: (List<Bitmap>, Int, Boolean) -> Unit,
+    onExportMp4: (Int, Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val fonts = LocalProCcdFonts.current
@@ -1227,12 +1248,11 @@ internal fun D3dWigglegramStudioScreen(
     LaunchedEffect(sourceFrames, recipe, formattedStamp) {
         if (sourceFrames.isEmpty()) return@LaunchedEffect
         isRenderingFrames = true
-        val gains =
-            ExposureMath.computeShaderFallbackGains(
-                hasManualSensor = false,
-                ev = recipe.opticalSettings.evCompensation,
-                iso = recipe.opticalSettings.iso,
-                shutterNs = recipe.opticalSettings.shutterSpeedNs
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = recipe,
+                profile = activeProfile,
+                stampText = formattedStamp
             )
         val rendered =
             sourceFrames.mapNotNull { frame ->
@@ -1242,8 +1262,9 @@ internal fun D3dWigglegramStudioScreen(
                         profile = activeProfile,
                         recipe = recipe,
                         stampText = formattedStamp,
-                        fallbackGains = gains,
-                        maxEdgeOverride = 720
+                        fallbackGains = params.fallbackGains,
+                        maxEdgeOverride = 720,
+                        skipStamp = params.skipStamp
                     )
                 }.getOrNull()
             }
@@ -1276,40 +1297,69 @@ internal fun D3dWigglegramStudioScreen(
                 .fillMaxWidth()
                 .background(ProCcdPalette.HardwareSlate)
                 .border(1.dp, ProCcdPalette.BorderMetallic)
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) {
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier.size(38.dp)
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",
                         tint = ProCcdPalette.CreamInk
                     )
                 }
-                LedStatusPill(label = "D3D WIGGLEGRAM", accentColor = ProCcdPalette.WarmAmber)
+                LedStatusPill(label = "D3D", accentColor = ProCcdPalette.WarmAmber)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!isSavedNegative) {
-                    OutlinedButton(
-                        onClick = { onSaveToWorks(activeFrames) },
-                        enabled = !isBusy && activeFrames.isNotEmpty(),
-                        border = BorderStroke(1.dp, ProCcdPalette.BorderHighlight),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "SAVE",
-                            color = ProCcdPalette.CreamInk,
-                            fontSize = 11.sp,
-                            fontFamily = fonts.condensed
-                        )
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { onSaveToWorks(activeFrames) },
+                    enabled = !isBusy && activeFrames.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
+                    border = BorderStroke(1.dp, ProCcdPalette.BorderHighlight),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(
+                        text = if (isSavedNegative) "SAVE" else "KEEP",
+                        color = ProCcdPalette.CreamInk,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fonts.condensed
+                    )
                 }
-                Button(
+                OutlinedButton(
                     onClick = { onExportLoopingGif(activeFrames, frameDelayMs, pingPong) },
                     enabled = !isBusy && activeFrames.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
+                    border = BorderStroke(1.dp, ProCcdPalette.LedCyan),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        Icons.Rounded.GifBox,
+                        contentDescription = null,
+                        tint = ProCcdPalette.LedCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = "EXPORT GIF",
+                        color = ProCcdPalette.LedCyan,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fonts.condensed
+                    )
+                }
+                Button(
+                    onClick = { onExportMp4(frameDelayMs, pingPong) },
+                    enabled = !isBusy && sourceFrames.isNotEmpty(),
+                    contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
                     colors =
                     ButtonDefaults.buttonColors(
                         containerColor = ProCcdPalette.WarmAmber,
@@ -1317,11 +1367,11 @@ internal fun D3dWigglegramStudioScreen(
                     ),
                     shape = RoundedCornerShape(8.dp)
                 ) {
-                    Icon(Icons.Rounded.GifBox, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Rounded.Videocam, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
                     Text(
-                        text = if (isBusy) "ENCODING..." else "EXPORT LOOPING GIF",
-                        fontSize = 11.sp,
+                        text = if (isBusy) "ENCODING..." else "EXPORT MP4",
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         fontFamily = fonts.condensed
                     )
@@ -1607,18 +1657,108 @@ internal fun PhotoBoothStudioScreen(
 internal fun VideoDetailScreen(
     entity: NegativeEntity,
     thumbnailCache: ThumbnailMemoryCache?,
+    isBusy: Boolean,
+    exportProgress: Float?,
     onBack: () -> Unit,
     onPlayOffline: () -> Unit,
     onShareOffline: () -> Unit,
+    onExportEditedMp4: (editedRecipe: CaptureRecipe, trimStartMs: Long, trimEndMs: Long) -> Unit,
     onSaveCaption: (String) -> Unit,
     onSoftDelete: () -> Unit
 ) {
+    val context = LocalContext.current
     val fonts = LocalProCcdFonts.current
-    val profile = remember(entity.cameraId) { CameraCatalog.findByIdOrDefault(entity.cameraId) }
+    val initialRecipe = remember(entity.recipeId, entity.recipeJson) { entity.toCaptureRecipe() }
+    var editRecipe by remember(entity.recipeId, entity.recipeJson) { mutableStateOf(initialRecipe) }
+    val activeProfile = remember(editRecipe.cameraId) { CameraCatalog.findByIdOrDefault(editRecipe.cameraId) }
     var captionText by remember(entity.recipeId, entity.caption) { mutableStateOf(entity.caption) }
     val thumbBitmap by produceState<Bitmap?>(initialValue = null, entity.thumbnailPath) {
         value = GalleryImageDecoder.loadThumbnailCached(entity.thumbnailPath, thumbnailCache)
     }
+
+    val rawVideoUri = entity.mediaUri ?: entity.exportedUri
+    val resolvedVideoUri =
+        remember(rawVideoUri, context) {
+            rawVideoUri?.let { MediaStoreExporter.resolveShareableVideoUri(context, it) }
+        }
+
+    var videoViewRef by remember(entity.recipeId) { mutableStateOf<VideoView?>(null) }
+    var loadedUriKey by remember(entity.recipeId) { mutableStateOf<String?>(null) }
+    var isPrepared by remember(resolvedVideoUri) { mutableStateOf(false) }
+    var isPlaying by remember(resolvedVideoUri) { mutableStateOf(false) }
+    var hasPlaybackError by remember(resolvedVideoUri) { mutableStateOf(false) }
+    var durationMs by remember(entity.recipeId) { mutableLongStateOf(entity.videoDurationMs.coerceAtLeast(0L)) }
+    var currentPositionMs by remember(entity.recipeId) { mutableLongStateOf(0L) }
+    var trimStartMs by remember(entity.recipeId) { mutableLongStateOf(0L) }
+    var trimEndMs by remember(entity.recipeId) { mutableLongStateOf(entity.videoDurationMs.coerceAtLeast(0L)) }
+
+    val videoFilterProfiles =
+        remember {
+            val priorityIds = listOf("original", "dcr", "v80", "ccd801", "z30", "grf")
+            val priority = priorityIds.mapNotNull { CameraCatalog.findById(it) }
+            (priority + CameraCatalog.all).distinctBy { it.id }
+        }
+    val videoFrameStyles =
+        remember {
+            listOf(
+                FrameBorderStyle.NONE,
+                FrameBorderStyle.DV_TIMECODE,
+                FrameBorderStyle.CINE_16MM,
+                FrameBorderStyle.FILM_35MM,
+                FrameBorderStyle.INSTANT_PRINT
+            )
+        }
+
+    LaunchedEffect(videoViewRef, resolvedVideoUri) {
+        val view = videoViewRef ?: return@LaunchedEffect
+        val uri = resolvedVideoUri ?: return@LaunchedEffect
+        val key = uri.toString()
+        if (loadedUriKey != key) {
+            loadedUriKey = key
+            isPrepared = false
+            isPlaying = false
+            hasPlaybackError = false
+            view.setVideoURI(uri)
+        }
+    }
+
+    LaunchedEffect(isPlaying, trimStartMs, trimEndMs) {
+        while (isPlaying) {
+            val view = videoViewRef
+            if (view != null) {
+                val pos = view.currentPosition.toLong().coerceAtLeast(0L)
+                currentPositionMs = pos
+                if (trimEndMs > 0L && pos >= trimEndMs) {
+                    view.pause()
+                    view.seekTo(trimStartMs.toInt())
+                    currentPositionMs = trimStartMs
+                    isPlaying = false
+                }
+            }
+            delay(100L)
+        }
+    }
+
+    DisposableEffect(entity.recipeId) {
+        onDispose {
+            videoViewRef?.stopPlayback()
+            videoViewRef = null
+        }
+    }
+
+    val minSpanMs = VideoTranscodeConfig.MIN_TRIM_DURATION_MS
+    val canTrim = durationMs > minSpanMs
+    val validTrimEnd =
+        if (durationMs > 0L) {
+            trimEndMs.coerceIn((trimStartMs + minSpanMs).coerceAtMost(durationMs), durationMs)
+        } else {
+            Long.MAX_VALUE
+        }
+    val canExportMp4 =
+        !isBusy &&
+            resolvedVideoUri != null &&
+            !hasPlaybackError &&
+            (durationMs == 0L || (validTrimEnd - trimStartMs) >= minSpanMs)
 
     Column(
         modifier =
@@ -1644,10 +1784,12 @@ internal fun VideoDetailScreen(
                         tint = ProCcdPalette.CreamInk
                     )
                 }
-                LedStatusPill(label = "VIDEO WORK • ${profile.codeName}", accentColor = ProCcdPalette.LedRed)
+                LedStatusPill(label = "VIDEO • ${activeProfile.codeName}", accentColor = ProCcdPalette.LedRed)
             }
             LedStatusPill(
-                label = DateStampFormatter.formatTimecode(entity.videoDurationMs),
+                label = "${DateStampFormatter.formatTimecode(
+                    currentPositionMs
+                )} / ${DateStampFormatter.formatTimecode(durationMs)}",
                 accentColor = ProCcdPalette.WarmAmber
             )
         }
@@ -1664,39 +1806,281 @@ internal fun VideoDetailScreen(
                 modifier =
                 Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(250.dp)
                     .clip(RoundedCornerShape(10.dp))
                     .background(ProCcdPalette.SurfaceRecessed)
-                    .border(1.dp, ProCcdPalette.BorderMetallic, RoundedCornerShape(10.dp))
-                    .clickable(onClick = onPlayOffline),
+                    .border(1.dp, ProCcdPalette.BorderMetallic, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                if (thumbBitmap != null) {
-                    Image(
-                        bitmap = thumbBitmap!!.asImageBitmap(),
-                        contentDescription = profile.codeName,
-                        contentScale = ContentScale.Crop,
+                if (resolvedVideoUri != null && !hasPlaybackError) {
+                    AndroidView(
+                        factory = { ctx ->
+                            VideoView(ctx).apply {
+                                setOnPreparedListener { mp ->
+                                    isPrepared = true
+                                    hasPlaybackError = false
+                                    val actualDuration = mp.duration.toLong().coerceAtLeast(0L)
+                                    if (actualDuration > 0L) {
+                                        durationMs = actualDuration
+                                        if (trimEndMs <= 0L || trimEndMs > actualDuration) {
+                                            trimEndMs = actualDuration
+                                        }
+                                        trimStartMs =
+                                            trimStartMs.coerceIn(
+                                                0L,
+                                                (trimEndMs - minSpanMs).coerceAtLeast(0L)
+                                            )
+                                    }
+                                    seekTo(trimStartMs.coerceAtLeast(1L).toInt())
+                                }
+                                setOnCompletionListener {
+                                    isPlaying = false
+                                    currentPositionMs = trimStartMs
+                                    seekTo(trimStartMs.toInt())
+                                }
+                                setOnErrorListener { _, _, _ ->
+                                    hasPlaybackError = true
+                                    isPlaying = false
+                                    true
+                                }
+                            }
+                        },
+                        update = { view ->
+                            if (videoViewRef !== view) {
+                                videoViewRef = view
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
-                    Icon(
-                        imageVector = Icons.Rounded.Videocam,
-                        contentDescription = null,
-                        tint = ProCcdPalette.TextMuted,
-                        modifier = Modifier.size(48.dp)
-                    )
+                    if (thumbBitmap != null) {
+                        Image(
+                            bitmap = thumbBitmap!!.asImageBitmap(),
+                            contentDescription = activeProfile.codeName,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Rounded.Videocam,
+                            contentDescription = null,
+                            tint = ProCcdPalette.TextMuted,
+                            modifier = Modifier.size(48.dp)
+                        )
+                    }
+                    Box(modifier = Modifier.align(Alignment.BottomCenter).padding(10.dp)) {
+                        LedStatusPill(
+                            label = if (rawVideoUri.isNullOrBlank()) "NO VIDEO URI" else "PREVIEW UNAVAILABLE",
+                            accentColor = ProCcdPalette.LedRed
+                        )
+                    }
                 }
-                Surface(
-                    shape = CircleShape,
-                    color = ProCcdPalette.VoidObsidian.copy(alpha = 0.78f),
-                    border = BorderStroke(1.5.dp, ProCcdPalette.WarmAmber)
+
+                if (resolvedVideoUri != null && !hasPlaybackError) {
+                    Surface(
+                        shape = CircleShape,
+                        color = ProCcdPalette.VoidObsidian.copy(alpha = 0.72f),
+                        border = BorderStroke(1.5.dp, ProCcdPalette.WarmAmber),
+                        modifier =
+                        Modifier
+                            .align(Alignment.Center)
+                            .clickable(enabled = isPrepared && !isBusy) {
+                                val view = videoViewRef ?: return@clickable
+                                if (isPlaying) {
+                                    view.pause()
+                                    isPlaying = false
+                                } else {
+                                    if (currentPositionMs < trimStartMs ||
+                                        (trimEndMs > 0L && currentPositionMs >= trimEndMs)
+                                    ) {
+                                        view.seekTo(trimStartMs.toInt())
+                                        currentPositionMs = trimStartMs
+                                    }
+                                    view.start()
+                                    isPlaying = true
+                                }
+                            }
+                    ) {
+                        Icon(
+                            imageVector = if (isPlaying) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                            contentDescription = if (isPlaying) "Pause Video" else "Play Video",
+                            tint = ProCcdPalette.WarmAmber,
+                            modifier = Modifier.padding(12.dp).size(30.dp)
+                        )
+                    }
+                }
+            }
+
+            Surface(
+                color = ProCcdPalette.HardwareSlate,
+                shape = RoundedCornerShape(10.dp),
+                border = BorderStroke(1.dp, ProCcdPalette.BorderMetallic)
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Rounded.PlayArrow,
-                        contentDescription = "Play Video",
-                        tint = ProCcdPalette.WarmAmber,
-                        modifier = Modifier.padding(14.dp).size(32.dp)
-                    )
+                    HardwareSectionLabel(text = "TRIM, GRADE & BORDER RE-EXPORT")
+
+                    if (canTrim) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "TRIM RANGE",
+                                color = ProCcdPalette.TextSecondary,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fonts.condensed
+                            )
+                            Text(
+                                text =
+                                "${DateStampFormatter.formatTimecode(trimStartMs)} -> " +
+                                    "${DateStampFormatter.formatTimecode(validTrimEnd)} " +
+                                    "(${DateStampFormatter.formatTimecode(validTrimEnd - trimStartMs)})",
+                                color = ProCcdPalette.WarmAmber,
+                                fontSize = 10.sp,
+                                fontFamily = fonts.led
+                            )
+                        }
+                        RangeSlider(
+                            value = trimStartMs.toFloat()..validTrimEnd.toFloat(),
+                            onValueChange = { range ->
+                                val maxDur = durationMs.toFloat()
+                                val rawStart = range.start.toLong().coerceIn(
+                                    0L,
+                                    (durationMs - minSpanMs).coerceAtLeast(0L)
+                                )
+                                val rawEnd = range.endInclusive.toLong().coerceIn(rawStart + minSpanMs, maxDur.toLong())
+                                trimStartMs = rawStart
+                                trimEndMs = rawEnd
+                                if (!isPlaying && isPrepared) {
+                                    videoViewRef?.seekTo(rawStart.toInt())
+                                    currentPositionMs = rawStart
+                                }
+                            },
+                            valueRange = 0f..durationMs.toFloat(),
+                            colors =
+                            SliderDefaults.colors(
+                                thumbColor = ProCcdPalette.WarmAmber,
+                                activeTrackColor = ProCcdPalette.WarmAmber,
+                                inactiveTrackColor = ProCcdPalette.BorderMetallic
+                            )
+                        )
+                    }
+
+                    HardwareSectionLabel(text = "CAMERA FILTER (${videoFilterProfiles.size})")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(videoFilterProfiles, key = { it.id }) { camProfile ->
+                            HardwareChip(
+                                label = camProfile.codeName,
+                                selected = editRecipe.cameraId == camProfile.id,
+                                onClick = {
+                                    editRecipe = GalleryRecipeReducer.swapCameraProfile(editRecipe, camProfile)
+                                },
+                                accentColor = ProCcdPalette.WarmAmber
+                            )
+                        }
+                    }
+
+                    HardwareSectionLabel(text = "FRAME BORDER (${videoFrameStyles.size})")
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(videoFrameStyles, key = { it.name }) { frame ->
+                            HardwareChip(
+                                label = frameLabel(frame),
+                                selected = editRecipe.opticalSettings.frameStyle == frame,
+                                onClick = {
+                                    editRecipe = GalleryRecipeReducer.updateFrameStyle(editRecipe, frame)
+                                },
+                                accentColor = ProCcdPalette.LedCyan
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "DATE / TIMECODE STAMP",
+                                color = ProCcdPalette.CreamInk,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                fontFamily = fonts.condensed
+                            )
+                            val stampSubtitle =
+                                if (editRecipe.stampConfig.enabled) {
+                                    "Burn stamp into exported MP4"
+                                } else {
+                                    "Stamp disabled"
+                                }
+                            Text(
+                                text = stampSubtitle,
+                                color = ProCcdPalette.TextSecondary,
+                                fontSize = 10.sp
+                            )
+                        }
+                        Switch(
+                            checked = editRecipe.stampConfig.enabled,
+                            onCheckedChange = { enabled ->
+                                editRecipe = GalleryRecipeReducer.updateStampEnabled(editRecipe, enabled)
+                            },
+                            colors =
+                            SwitchDefaults.colors(
+                                checkedThumbColor = ProCcdPalette.VoidObsidian,
+                                checkedTrackColor = ProCcdPalette.WarmAmber
+                            )
+                        )
+                    }
+
+                    if (isBusy && exportProgress != null) {
+                        val pct = (exportProgress.coerceIn(0f, 1f) * 100f).roundToInt()
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            LinearProgressIndicator(
+                                progress = { exportProgress.coerceIn(0f, 1f) },
+                                color = ProCcdPalette.WarmAmber,
+                                trackColor = ProCcdPalette.SurfaceRecessed,
+                                modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp))
+                            )
+                            Text(
+                                text = "TRANSCODING MP4 • $pct%",
+                                color = ProCcdPalette.WarmAmber,
+                                fontSize = 10.sp,
+                                fontFamily = fonts.led
+                            )
+                        }
+                    }
+
+                    Button(
+                        onClick = {
+                            if (isPlaying) {
+                                videoViewRef?.pause()
+                                isPlaying = false
+                            }
+                            onExportEditedMp4(editRecipe, trimStartMs, validTrimEnd)
+                        },
+                        enabled = canExportMp4,
+                        colors =
+                        ButtonDefaults.buttonColors(
+                            containerColor = ProCcdPalette.WarmAmber,
+                            contentColor = ProCcdPalette.VoidObsidian
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Rounded.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isBusy) "TRANSCODING MP4..." else "EXPORT MP4",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = fonts.condensed
+                        )
+                    }
                 }
             }
 
@@ -1704,19 +2088,26 @@ internal fun VideoDetailScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Button(
+                OutlinedButton(
                     onClick = onPlayOffline,
-                    colors =
-                    ButtonDefaults.buttonColors(
-                        containerColor = ProCcdPalette.WarmAmber,
-                        contentColor = ProCcdPalette.VoidObsidian
-                    ),
+                    border = BorderStroke(1.dp, ProCcdPalette.WarmAmber),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Rounded.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(
+                        Icons.Rounded.PlayArrow,
+                        contentDescription = null,
+                        tint = ProCcdPalette.WarmAmber,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("OPEN IN PLAYER", fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = fonts.condensed)
+                    Text(
+                        "OPEN IN PLAYER",
+                        color = ProCcdPalette.WarmAmber,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fonts.condensed
+                    )
                 }
                 OutlinedButton(
                     onClick = onShareOffline,
@@ -1745,8 +2136,8 @@ internal fun VideoDetailScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     HardwareSectionLabel(text = "VIDEO METADATA & NOTES")
-                    ExifSpecRow("CAMERA", "${profile.codeName} (${profile.subtitle})")
-                    ExifSpecRow("DURATION", DateStampFormatter.formatTimecode(entity.videoDurationMs))
+                    ExifSpecRow("CAMERA", "${activeProfile.codeName} (${activeProfile.subtitle})")
+                    ExifSpecRow("DURATION", DateStampFormatter.formatTimecode(durationMs))
                     ExifSpecRow("RECORDED", formatEpochTimestamp(entity.capturedAtEpochMs))
                     ExifSpecRow("MEDIASTORE URI", entity.mediaUri?.takeLast(36) ?: "Not linked")
                     Row(

@@ -50,13 +50,48 @@ enum class CameraShelfGroup(val label: String) {
     SPECIAL("Special")
 }
 
-enum class StudioCropPreset(val label: String, val aspectPreset: AspectRatioPreset?, val exactRatio: Float?) {
-    ORIGINAL("Original", null, null),
-    RATIO_1_1("1:1", AspectRatioPreset.RATIO_1_1, 1f),
-    RATIO_3_4("3:4", AspectRatioPreset.RATIO_4_3, 3f / 4f),
-    RATIO_4_3("4:3", AspectRatioPreset.RATIO_4_3, 4f / 3f),
-    RATIO_16_9("16:9", AspectRatioPreset.RATIO_16_9, 16f / 9f),
-    RATIO_9_16("9:16", AspectRatioPreset.RATIO_16_9, 9f / 16f)
+enum class StudioCropPreset(
+    val label: String,
+    val aspectPreset: AspectRatioPreset?,
+    val exactRatio: Float?,
+    val portraitOverride: Boolean? = null
+) {
+    ORIGINAL("Original", null, null, null),
+    RATIO_1_1("1:1", AspectRatioPreset.RATIO_1_1, 1f, false),
+    RATIO_3_4("3:4", AspectRatioPreset.RATIO_4_3, 3f / 4f, true),
+    RATIO_4_3("4:3", AspectRatioPreset.RATIO_4_3, 4f / 3f, false),
+    RATIO_16_9("16:9", AspectRatioPreset.RATIO_16_9, 16f / 9f, false),
+    RATIO_9_16("9:16", AspectRatioPreset.RATIO_16_9, 9f / 16f, true)
+}
+
+data class StudioUndoState(
+    val current: CaptureRecipe,
+    val undoStack: List<CaptureRecipe> = emptyList(),
+    val maxHistory: Int = DEFAULT_MAX_HISTORY
+) {
+    val canUndo: Boolean
+        get() = undoStack.isNotEmpty()
+
+    fun push(next: CaptureRecipe): StudioUndoState {
+        if (next == current) return this
+        val cap = maxHistory.coerceAtLeast(1)
+        return copy(
+            current = next,
+            undoStack = (undoStack + current).takeLast(cap)
+        )
+    }
+
+    fun undo(): StudioUndoState {
+        if (undoStack.isEmpty()) return this
+        return copy(
+            current = undoStack.last(),
+            undoStack = undoStack.dropLast(1)
+        )
+    }
+
+    companion object {
+        const val DEFAULT_MAX_HISTORY = 30
+    }
 }
 
 enum class AdjustParameter(val label: String) {
@@ -274,8 +309,48 @@ object GalleryRecipeReducer {
     )
 
     fun updateCropPreset(recipe: CaptureRecipe, preset: StudioCropPreset): CaptureRecipe = recipe.copy(
-        opticalSettings = recipe.opticalSettings.copy(cropAspectRatio = preset.aspectPreset)
+        opticalSettings =
+        recipe.opticalSettings.copy(
+            cropAspectRatio = preset.aspectPreset,
+            cropPortraitOverride = preset.portraitOverride
+        )
     )
+
+    fun resolveCropPreset(opticalSettings: OpticalSettings, isSourcePortrait: Boolean = false): StudioCropPreset =
+        when (opticalSettings.cropAspectRatio) {
+            null -> StudioCropPreset.ORIGINAL
+            AspectRatioPreset.RATIO_1_1 -> StudioCropPreset.RATIO_1_1
+            AspectRatioPreset.RATIO_4_3 ->
+                if (opticalSettings.cropPortraitOverride ?: isSourcePortrait) {
+                    StudioCropPreset.RATIO_3_4
+                } else {
+                    StudioCropPreset.RATIO_4_3
+                }
+            AspectRatioPreset.RATIO_16_9 ->
+                if (opticalSettings.cropPortraitOverride ?: isSourcePortrait) {
+                    StudioCropPreset.RATIO_9_16
+                } else {
+                    StudioCropPreset.RATIO_16_9
+                }
+            AspectRatioPreset.RATIO_3_2 -> StudioCropPreset.ORIGINAL
+        }
+
+    fun rotate90Cw(recipe: CaptureRecipe): CaptureRecipe {
+        val nextRotation = OpticalSettings.normalizeRotationDegrees(recipe.opticalSettings.rotationDegrees + 90)
+        return recipe.copy(
+            opticalSettings = recipe.opticalSettings.copy(rotationDegrees = nextRotation)
+        )
+    }
+
+    fun updateGrainBoost(recipe: CaptureRecipe, grainBoost: Float): CaptureRecipe = recipe.copy(
+        opticalSettings =
+        recipe.opticalSettings.copy(
+            grainBoost = grainBoost.coerceIn(OpticalSettings.MIN_GRAIN_BOOST, OpticalSettings.MAX_GRAIN_BOOST)
+        )
+    )
+
+    fun singlePhotoFrameStyles(): List<FrameBorderStyle> =
+        FrameBorderStyle.entries.filter { it != FrameBorderStyle.PHOTO_BOOTH_4STRIP }
 
     fun updateStraightenDegrees(recipe: CaptureRecipe, degrees: Float): CaptureRecipe = recipe.copy(
         opticalSettings =
@@ -330,7 +405,7 @@ object GalleryRecipeReducer {
         recipe: CaptureRecipe,
         profile: CameraProfile,
         stampText: String,
-        grainBoost: Float = 0f,
+        grainBoost: Float = recipe.opticalSettings.grainBoost,
         splitCompareRatio: Float = 0f,
         isHoldOriginal: Boolean = false,
         inputAspectRatio: Float = 4f / 3f,
@@ -343,7 +418,8 @@ object GalleryRecipeReducer {
                 iso = recipe.opticalSettings.iso,
                 shutterNs = recipe.opticalSettings.shutterSpeedNs
             )
-        val clampedGrainBoost = grainBoost.coerceIn(0f, 1f) * 1.4f
+        val clampedGrainBoost =
+            grainBoost.coerceIn(OpticalSettings.MIN_GRAIN_BOOST, OpticalSettings.MAX_GRAIN_BOOST) * 1.4f
         val effectiveGains =
             baseGains.copy(
                 shaderNoiseBoost = maxOf(baseGains.shaderNoiseBoost, clampedGrainBoost)
@@ -358,7 +434,8 @@ object GalleryRecipeReducer {
             splitCompareRatio = splitCompareRatio.coerceIn(0f, 1f),
             randomSeed = recipe.randomSeed,
             inputAspectRatio = inputAspectRatio.coerceAtLeast(0.1f),
-            skipStamp = skipStamp
+            skipStamp = skipStamp || recipe.isPreComposited,
+            isPreComposited = recipe.isPreComposited
         )
     }
 }

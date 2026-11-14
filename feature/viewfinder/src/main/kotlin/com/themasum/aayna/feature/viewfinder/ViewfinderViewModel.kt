@@ -426,6 +426,12 @@ class ViewfinderViewModel(
         viewModelScope.launch { preferencesRepository.setUseEraYearOffset(next) }
     }
 
+    fun updateStampCustomText(text: String) {
+        _uiState.update { state ->
+            ViewfinderStateReducer.updateStampCustomText(state, text)
+        }
+    }
+
     fun setShelfCategory(category: CameraCategory?) {
         _uiState.update { it.copy(cameraShelfCategory = category, cameraShelfFavoritesOnly = false) }
     }
@@ -944,12 +950,11 @@ class ViewfinderViewModel(
                 isFrontMirrorEnabled = state.settings.isFrontMirrorEnabled
             )
         val recipe =
-            CaptureRecipe(
+            ViewfinderStateReducer.buildD3dBurstRecipe(
                 recipeId = UUID.randomUUID().toString(),
                 cameraId = renderProfile.id,
                 capturedAtEpochMs = capturedAtMs,
                 randomSeed = state.randomSeed,
-                mediaType = MediaType.D3D_BURST,
                 skinId = state.activeSkinId,
                 resolutionPreset = state.settings.resolutionPreset,
                 opticalSettings = state.opticalSettings,
@@ -1000,6 +1005,10 @@ class ViewfinderViewModel(
                     exportedUri = gifUri?.toString(),
                     mediaUri = gifUri?.toString()
                 )
+            negativeRepository.saveD3dBurstFrames(
+                recipeId = recipe.recipeId,
+                frames = rawFrames.map { it.bitmap }
+            )
             _uiState.update {
                 it.copy(
                     lastCapturedUri = gifUri?.toString(),
@@ -1041,18 +1050,16 @@ class ViewfinderViewModel(
                     delay(550L)
                 }
             }
-            val recipe =
-                CaptureRecipe(
+            val renderRecipe =
+                ViewfinderStateReducer.buildPhotoBoothRenderRecipe(
                     recipeId = UUID.randomUUID().toString(),
                     cameraId = renderProfile.id,
                     capturedAtEpochMs = capturedAtMs,
                     randomSeed = state.randomSeed,
-                    mediaType = MediaType.STILL,
                     skinId = state.activeSkinId,
                     resolutionPreset = state.settings.resolutionPreset,
-                    opticalSettings = state.opticalSettings.copy(frameStyle = FrameBorderStyle.PHOTO_BOOTH_4STRIP),
-                    stampConfig = state.stampConfig,
-                    burstFrameCount = 4
+                    opticalSettings = state.opticalSettings,
+                    stampConfig = state.stampConfig
                 )
             val advanceResult =
                 if (state.settings.storageMode == CaptureStorageMode.ANALOG_DEVELOPING_RITUAL) {
@@ -1068,15 +1075,16 @@ class ViewfinderViewModel(
                 offscreenExporter.renderPhotoBooth4Strip(
                     frames = rawBitmaps,
                     profile = renderProfile,
-                    recipe = recipe,
+                    recipe = renderRecipe,
                     stampText = captureStampText,
                     fallbackGains = fallbackGains
                 )
+            val savedRecipe = ViewfinderStateReducer.finalizePhotoBoothRecipe(renderRecipe)
             val uri =
                 mediaStoreExporter.saveJpegToGallery(
                     bitmap = compositeBitmap,
                     profile = renderProfile,
-                    recipe = recipe,
+                    recipe = savedRecipe,
                     suffix = "BOOTH",
                     jpegQuality = state.settings.clampedJpegQuality()
                 )
@@ -1085,7 +1093,7 @@ class ViewfinderViewModel(
                 negativeRepository.saveNegative(
                     cleanBitmap = compositeBitmap,
                     thumbnailBitmap = thumbBitmap,
-                    recipe = recipe,
+                    recipe = savedRecipe,
                     rollId = advanceResult?.updatedState?.rollId,
                     frameNumber = advanceResult?.assignedFrameNumber,
                     exportedUri = uri?.toString()

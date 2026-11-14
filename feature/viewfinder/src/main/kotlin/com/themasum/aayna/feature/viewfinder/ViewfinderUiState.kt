@@ -6,12 +6,15 @@ import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.CameraCategory
 import com.themasum.aayna.core.model.CameraProfile
 import com.themasum.aayna.core.model.CameraSkinSpec
+import com.themasum.aayna.core.model.CaptureRecipe
 import com.themasum.aayna.core.model.CaptureStorageMode
 import com.themasum.aayna.core.model.ExposureMath
 import com.themasum.aayna.core.model.FlashMode
 import com.themasum.aayna.core.model.FrameBorderStyle
 import com.themasum.aayna.core.model.LensAttachment
+import com.themasum.aayna.core.model.MediaType
 import com.themasum.aayna.core.model.OpticalSettings
+import com.themasum.aayna.core.model.ResolutionPreset
 import com.themasum.aayna.core.model.SkinCatalog
 import com.themasum.aayna.core.model.StampConfig
 import com.themasum.aayna.core.model.TimerDuration
@@ -176,6 +179,7 @@ data class ViewfinderUiState(
 )
 
 object ViewfinderStateReducer {
+    const val MAX_CUSTOM_STAMP_CHARS: Int = 24
     private val evPresets = listOf(-2.0f, -1.5f, -1.0f, -0.5f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f)
 
     fun defaultOpticalSettingsFor(profile: CameraProfile): OpticalSettings = profile.buildDefaultOpticalSettings()
@@ -393,4 +397,63 @@ object ViewfinderStateReducer {
             else -> "0.0"
         }
     }
+
+    fun updateStampCustomText(state: ViewfinderUiState, text: String): ViewfinderUiState = state.copy(
+        stampConfig = state.stampConfig.copy(customText = text.take(MAX_CUSTOM_STAMP_CHARS))
+    )
+
+    fun singlePhotoFrameStyles(): List<FrameBorderStyle> =
+        FrameBorderStyle.entries.filter { it != FrameBorderStyle.PHOTO_BOOTH_4STRIP }
+
+    fun finalizePhotoBoothRecipe(recipe: CaptureRecipe): CaptureRecipe = recipe.copy(
+        opticalSettings = recipe.opticalSettings.copy(frameStyle = FrameBorderStyle.NONE),
+        isPreComposited = true
+    )
+
+    fun buildD3dBurstRecipe(
+        recipeId: String,
+        cameraId: String,
+        capturedAtEpochMs: Long,
+        randomSeed: Long,
+        skinId: String,
+        resolutionPreset: ResolutionPreset,
+        opticalSettings: OpticalSettings,
+        stampConfig: StampConfig,
+        burstFrameCount: Int
+    ): CaptureRecipe = CaptureRecipe(
+        recipeId = recipeId,
+        cameraId = cameraId,
+        capturedAtEpochMs = capturedAtEpochMs,
+        randomSeed = randomSeed,
+        mediaType = MediaType.D3D_BURST,
+        skinId = skinId,
+        resolutionPreset = resolutionPreset,
+        opticalSettings = opticalSettings,
+        stampConfig = stampConfig,
+        burstFrameCount = burstFrameCount,
+        isPreComposited = false
+    )
+
+    fun buildPhotoBoothRenderRecipe(
+        recipeId: String,
+        cameraId: String,
+        capturedAtEpochMs: Long,
+        randomSeed: Long,
+        skinId: String,
+        resolutionPreset: ResolutionPreset,
+        opticalSettings: OpticalSettings,
+        stampConfig: StampConfig
+    ): CaptureRecipe = CaptureRecipe(
+        recipeId = recipeId,
+        cameraId = cameraId,
+        capturedAtEpochMs = capturedAtEpochMs,
+        randomSeed = randomSeed,
+        mediaType = MediaType.STILL,
+        skinId = skinId,
+        resolutionPreset = resolutionPreset,
+        opticalSettings = opticalSettings.copy(frameStyle = FrameBorderStyle.PHOTO_BOOTH_4STRIP),
+        stampConfig = stampConfig,
+        burstFrameCount = 4,
+        isPreComposited = false
+    )
 }

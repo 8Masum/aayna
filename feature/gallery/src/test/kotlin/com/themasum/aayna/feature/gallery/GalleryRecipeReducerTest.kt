@@ -1,5 +1,6 @@
 package com.themasum.aayna.feature.gallery
 
+import com.themasum.aayna.core.model.AaynaJson
 import com.themasum.aayna.core.model.AspectRatioPreset
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.FlashMode
@@ -315,5 +316,141 @@ class GalleryRecipeReducerTest {
             listOf("trashed_1"),
             GalleryFilterHelper.filterNegatives(GalleryFilterTab.TRASH, active, trashed).map { it.recipeId }
         )
+    }
+
+    @Test
+    fun `updateCropPreset persists cropPortraitOverride through json round trip for 3_4 4_3 16_9 and 9_16`() {
+        val base =
+            baseRecipe.copy(
+                recipeId = "crop_test",
+                cameraId = "original"
+            )
+
+        val cases =
+            listOf(
+                Triple(StudioCropPreset.RATIO_3_4, AspectRatioPreset.RATIO_4_3, true),
+                Triple(StudioCropPreset.RATIO_4_3, AspectRatioPreset.RATIO_4_3, false),
+                Triple(StudioCropPreset.RATIO_16_9, AspectRatioPreset.RATIO_16_9, false),
+                Triple(StudioCropPreset.RATIO_9_16, AspectRatioPreset.RATIO_16_9, true)
+            )
+
+        cases.forEach { (preset, expectedAspect, expectedPortraitOverride) ->
+            val updated = GalleryRecipeReducer.updateCropPreset(base, preset)
+            assertEquals(expectedAspect, updated.opticalSettings.cropAspectRatio)
+            assertEquals(expectedPortraitOverride, updated.opticalSettings.cropPortraitOverride)
+
+            val roundTripped = AaynaJson.decodeRecipe(AaynaJson.encodeRecipe(updated))
+            assertEquals(expectedAspect, roundTripped.opticalSettings.cropAspectRatio)
+            assertEquals(expectedPortraitOverride, roundTripped.opticalSettings.cropPortraitOverride)
+            assertEquals(
+                preset,
+                GalleryRecipeReducer.resolveCropPreset(roundTripped.opticalSettings, isSourcePortrait = false)
+            )
+            assertEquals(
+                preset,
+                GalleryRecipeReducer.resolveCropPreset(roundTripped.opticalSettings, isSourcePortrait = true)
+            )
+        }
+    }
+
+    @Test
+    fun `rotate90Cw wraps rotationDegrees cleanly and persists across json round trip`() {
+        val base = baseRecipe.copy(recipeId = "rot_test", cameraId = "original")
+        val rot90 = GalleryRecipeReducer.rotate90Cw(base)
+        val rot180 = GalleryRecipeReducer.rotate90Cw(rot90)
+        val rot270 = GalleryRecipeReducer.rotate90Cw(rot180)
+        val rot360 = GalleryRecipeReducer.rotate90Cw(rot270)
+
+        assertEquals(90, rot90.opticalSettings.rotationDegrees)
+        assertEquals(180, rot180.opticalSettings.rotationDegrees)
+        assertEquals(270, rot270.opticalSettings.rotationDegrees)
+        assertEquals(0, rot360.opticalSettings.rotationDegrees)
+
+        val roundTripped = AaynaJson.decodeRecipe(AaynaJson.encodeRecipe(rot270))
+        assertEquals(270, roundTripped.opticalSettings.rotationDegrees)
+    }
+
+    @Test
+    fun `updateGrainBoost clamps range persists across json and feeds buildGlRenderParams`() {
+        val base = baseRecipe.copy(recipeId = "grain_test", cameraId = "original")
+        val clampedHigh = GalleryRecipeReducer.updateGrainBoost(base, 1.8f)
+        val clampedLow = GalleryRecipeReducer.updateGrainBoost(base, -0.4f)
+        val mid = GalleryRecipeReducer.updateGrainBoost(base, 0.6f)
+
+        assertEquals(1f, clampedHigh.opticalSettings.grainBoost, 0.0001f)
+        assertEquals(0f, clampedLow.opticalSettings.grainBoost, 0.0001f)
+        assertEquals(0.6f, mid.opticalSettings.grainBoost, 0.0001f)
+
+        val roundTripped = AaynaJson.decodeRecipe(AaynaJson.encodeRecipe(mid))
+        assertEquals(0.6f, roundTripped.opticalSettings.grainBoost, 0.0001f)
+
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = roundTripped,
+                profile = CameraCatalog.original,
+                stampText = ""
+            )
+        assertEquals(0.6f, params.opticalSettings.grainBoost, 0.0001f)
+        assertEquals(0.84f, params.fallbackGains.shaderNoiseBoost, 0.0001f)
+    }
+
+    @Test
+    fun `buildGlRenderParams forwards isPreComposited and skips double stamp`() {
+        val base =
+            baseRecipe.copy(
+                recipeId = "booth_strip_test",
+                cameraId = "grf",
+                isPreComposited = true
+            )
+        val params =
+            GalleryRecipeReducer.buildGlRenderParams(
+                recipe = base,
+                profile = CameraCatalog.grf,
+                stampText = "",
+                skipStamp = false
+            )
+
+        assertEquals(true, params.isPreComposited)
+        assertEquals(true, params.skipStamp)
+    }
+
+    @Test
+    fun `singlePhotoFrameStyles excludes PHOTO_BOOTH_4STRIP`() {
+        val styles = GalleryRecipeReducer.singlePhotoFrameStyles()
+
+        assertEquals(false, styles.contains(FrameBorderStyle.PHOTO_BOOTH_4STRIP))
+        assertEquals(FrameBorderStyle.entries.size - 1, styles.size)
+    }
+
+    @Test
+    fun `studioUndoState pushes caps history ignores duplicates and restores on undo`() {
+        val r0 = baseRecipe.copy(recipeId = "undo_0", cameraId = "original")
+        val r1 = GalleryRecipeReducer.rotate90Cw(r0)
+        val r2 = GalleryRecipeReducer.updateGrainBoost(r1, 0.5f)
+        val r3 = GalleryRecipeReducer.updateCropPreset(r2, StudioCropPreset.RATIO_3_4)
+        val r4 = GalleryRecipeReducer.updateFrameStyle(r3, FrameBorderStyle.FILM_35MM)
+
+        val initial = StudioUndoState(current = r0, maxHistory = 3)
+        assertEquals(false, initial.canUndo)
+        assertEquals(r0, initial.undo().current)
+
+        val s1 = initial.push(r1).push(r1)
+        assertEquals(1, s1.undoStack.size)
+        assertEquals(true, s1.canUndo)
+
+        val s4 = s1.push(r2).push(r3).push(r4)
+        assertEquals(r4, s4.current)
+        assertEquals(3, s4.undoStack.size)
+        assertEquals(listOf(r1, r2, r3), s4.undoStack)
+
+        val afterFirstUndo = s4.undo()
+        assertEquals(r3, afterFirstUndo.current)
+        assertEquals(2, afterFirstUndo.undoStack.size)
+
+        val afterSecondUndo = afterFirstUndo.undo()
+        assertEquals(r2, afterSecondUndo.current)
+        val afterThirdUndo = afterSecondUndo.undo()
+        assertEquals(r1, afterThirdUndo.current)
+        assertEquals(false, afterThirdUndo.canUndo)
     }
 }

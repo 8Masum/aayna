@@ -174,8 +174,12 @@ object GalleryImageDecoder {
         }
     }
 
-    fun rotateBitmap90Cw(source: Bitmap): Bitmap {
-        val matrix = Matrix().apply { postRotate(90f) }
+    fun rotateBitmap90Cw(source: Bitmap): Bitmap = rotateBitmap(source, 90)
+
+    fun rotateBitmap(source: Bitmap, rotationDegrees: Int): Bitmap {
+        val normalized = ((rotationDegrees % 360) + 360) % 360
+        if (normalized == 0) return source
+        val matrix = Matrix().apply { postRotate(normalized.toFloat()) }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 

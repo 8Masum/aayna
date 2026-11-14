@@ -3,15 +3,22 @@ package com.themasum.aayna.feature.viewfinder
 import com.themasum.aayna.core.model.AspectRatioPreset
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.CaptureStorageMode
+import com.themasum.aayna.core.model.DateStampFormatter
 import com.themasum.aayna.core.model.ExposureMath
 import com.themasum.aayna.core.model.FlashMode
 import com.themasum.aayna.core.model.FrameBorderStyle
 import com.themasum.aayna.core.model.LensAttachment
+import com.themasum.aayna.core.model.MediaType
+import com.themasum.aayna.core.model.OpticalSettings
+import com.themasum.aayna.core.model.ResolutionPreset
+import com.themasum.aayna.core.model.StampConfig
 import com.themasum.aayna.core.model.StampFontStyle
+import com.themasum.aayna.core.model.StampFormat
 import com.themasum.aayna.core.model.StampPosition
 import com.themasum.aayna.core.model.TimerDuration
 import com.themasum.aayna.core.model.UserSettingsSnapshot
 import com.themasum.aayna.core.model.WhiteBalancePreset
+import java.time.ZoneOffset
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -280,5 +287,84 @@ class ViewfinderStateReducerTest {
         assertEquals("+0.5", ViewfinderStateReducer.formatEvLabel(0.5f))
         assertEquals("-1.0", ViewfinderStateReducer.formatEvLabel(-1.0f))
         assertEquals("0.0", ViewfinderStateReducer.formatEvLabel(0.0f))
+    }
+
+    @Test
+    fun updateStampCustomText_clampsAndFormatsWithStampFormatCustom() {
+        val base = ViewfinderUiState()
+        val withText = ViewfinderStateReducer.updateStampCustomText(base, "aayna '04!@#")
+        assertEquals("aayna '04!@#", withText.stampConfig.customText)
+
+        val formatted =
+            DateStampFormatter.format(
+                epochMillis = 1_700_000_000_000L,
+                format = StampFormat.CUSTOM,
+                useEraYearOffset = false,
+                eraYear = 2004,
+                customText = withText.stampConfig.customText,
+                zoneId = ZoneOffset.UTC
+            )
+        assertEquals("AAYNA '04", formatted)
+
+        val overLimit = "123456789012345678901234567890"
+        val clamped = ViewfinderStateReducer.updateStampCustomText(base, overLimit)
+        assertEquals(ViewfinderStateReducer.MAX_CUSTOM_STAMP_CHARS, clamped.stampConfig.customText.length)
+        assertEquals("123456789012345678901234", clamped.stampConfig.customText)
+
+        val preservedAcrossSettings =
+            ViewfinderStateReducer.applyUserSettings(
+                state = clamped.copy(stampConfig = clamped.stampConfig.copy(format = StampFormat.CUSTOM)),
+                settings = UserSettingsSnapshot(stampFormat = StampFormat.CUSTOM)
+            )
+        assertEquals("123456789012345678901234", preservedAcrossSettings.stampConfig.customText)
+    }
+
+    @Test
+    fun singlePhotoFrameStyles_excludesPhotoBooth4Strip() {
+        val frames = ViewfinderStateReducer.singlePhotoFrameStyles()
+        assertFalse(frames.contains(FrameBorderStyle.PHOTO_BOOTH_4STRIP))
+        assertEquals(FrameBorderStyle.entries.size - 1, frames.size)
+        assertTrue(frames.contains(FrameBorderStyle.NONE))
+        assertTrue(frames.contains(FrameBorderStyle.INSTANT_PRINT))
+    }
+
+    @Test
+    fun photoBoothAndD3dRecipes_preserveExpectedInvariants() {
+        val renderRecipe =
+            ViewfinderStateReducer.buildPhotoBoothRenderRecipe(
+                recipeId = "booth-1",
+                cameraId = CameraCatalog.booth.id,
+                capturedAtEpochMs = 1_700_000_000_000L,
+                randomSeed = 42L,
+                skinId = CameraCatalog.booth.defaultSkinId,
+                resolutionPreset = ResolutionPreset.DIGICAM_5MP,
+                opticalSettings = OpticalSettings(),
+                stampConfig = StampConfig()
+            )
+        assertEquals(FrameBorderStyle.PHOTO_BOOTH_4STRIP, renderRecipe.opticalSettings.frameStyle)
+        assertEquals(4, renderRecipe.burstFrameCount)
+        assertFalse(renderRecipe.isPreComposited)
+
+        val savedBoothRecipe = ViewfinderStateReducer.finalizePhotoBoothRecipe(renderRecipe)
+        assertEquals(FrameBorderStyle.NONE, savedBoothRecipe.opticalSettings.frameStyle)
+        assertTrue(savedBoothRecipe.isPreComposited)
+        assertEquals(4, savedBoothRecipe.burstFrameCount)
+        assertEquals("booth-1", savedBoothRecipe.recipeId)
+
+        val d3dRecipe =
+            ViewfinderStateReducer.buildD3dBurstRecipe(
+                recipeId = "d3d-1",
+                cameraId = CameraCatalog.d3d.id,
+                capturedAtEpochMs = 1_700_000_000_000L,
+                randomSeed = 77L,
+                skinId = CameraCatalog.d3d.defaultSkinId,
+                resolutionPreset = ResolutionPreset.DIGICAM_5MP,
+                opticalSettings = OpticalSettings(),
+                stampConfig = StampConfig(),
+                burstFrameCount = 4
+            )
+        assertEquals(MediaType.D3D_BURST, d3dRecipe.mediaType)
+        assertEquals(4, d3dRecipe.burstFrameCount)
+        assertFalse(d3dRecipe.isPreComposited)
     }
 }

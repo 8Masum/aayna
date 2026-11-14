@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.RotateRight
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Compare
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.FlashOff
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.themasum.aayna.core.gl.GlMath
 import com.themasum.aayna.core.gl.GlRenderParams
 import com.themasum.aayna.core.gl.OffscreenGlExporter
 import com.themasum.aayna.core.gl.StudioGlPreviewRenderer
@@ -122,6 +124,8 @@ internal fun GalleryStudioEditor(
     favoriteCameraIds: Set<String>,
     selectedCropPreset: StudioCropPreset,
     grainBoost: Float,
+    canUndo: Boolean = false,
+    onUndo: () -> Unit = {},
     onGrainBoostChange: (Float) -> Unit,
     onSelectCropPreset: (StudioCropPreset) -> Unit,
     onRotate90Cw: () -> Unit,
@@ -157,8 +161,14 @@ internal fun GalleryStudioEditor(
         }
 
     val inputAspect =
-        remember(sourceBitmap) {
-            sourceBitmap.width.toFloat() / sourceBitmap.height.coerceAtLeast(1).toFloat()
+        remember(sourceBitmap, recipe.opticalSettings.rotationDegrees) {
+            val (rotW, rotH) =
+                GlMath.computeRotatedDimensions(
+                    width = sourceBitmap.width,
+                    height = sourceBitmap.height,
+                    rotationDegrees = recipe.opticalSettings.rotationDegrees
+                )
+            rotW.toFloat() / rotH.coerceAtLeast(1).toFloat()
         }
 
     val renderParams =
@@ -235,6 +245,11 @@ internal fun GalleryStudioEditor(
             isExporting = isExporting,
             showSplitBar = showSplitBar,
             isGlRealtime = studioGlRenderer != null,
+            canUndo = canUndo,
+            onUndo = {
+                onDialTick()
+                onUndo()
+            },
             onToggleSplitBar = {
                 showSplitBar = !showSplitBar
                 if (!showSplitBar) {
@@ -390,6 +405,8 @@ private fun EditorTopBar(
     isExporting: Boolean,
     showSplitBar: Boolean,
     isGlRealtime: Boolean,
+    canUndo: Boolean,
+    onUndo: () -> Unit,
     onToggleSplitBar: () -> Unit,
     onSaveEdits: () -> Unit,
     onExportToGallery: () -> Unit,
@@ -402,12 +419,15 @@ private fun EditorTopBar(
             .fillMaxWidth()
             .background(ProCcdPalette.HardwareSlate)
             .border(1.dp, ProCcdPalette.BorderMetallic)
-            .padding(horizontal = 8.dp, vertical = 6.dp),
+            .padding(horizontal = 6.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onCloseEditor) {
+            IconButton(
+                onClick = onCloseEditor,
+                modifier = Modifier.size(38.dp)
+            ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                     contentDescription = "Back to Gallery",
@@ -416,11 +436,25 @@ private fun EditorTopBar(
             }
             LedStatusPill(label = cameraCodeName, accentColor = ProCcdPalette.LedCyan)
             if (isGlRealtime) {
-                Spacer(modifier = Modifier.width(6.dp))
+                Spacer(modifier = Modifier.width(4.dp))
                 LedStatusPill(label = "GL LIVE", accentColor = ProCcdPalette.LedEmerald)
             }
-            Spacer(modifier = Modifier.width(4.dp))
-            IconButton(onClick = onToggleSplitBar) {
+            Spacer(modifier = Modifier.width(2.dp))
+            IconButton(
+                onClick = onUndo,
+                enabled = canUndo && !isExporting,
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Rounded.Undo,
+                    contentDescription = "UNDO",
+                    tint = if (canUndo && !isExporting) ProCcdPalette.WarmAmber else ProCcdPalette.TextMuted
+                )
+            }
+            IconButton(
+                onClick = onToggleSplitBar,
+                modifier = Modifier.size(36.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Rounded.Compare,
                     contentDescription = "Split Compare",
@@ -431,12 +465,12 @@ private fun EditorTopBar(
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             OutlinedButton(
                 onClick = onSaveEdits,
                 enabled = !isExporting,
-                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(horizontal = 9.dp, vertical = 6.dp),
                 border = BorderStroke(1.dp, ProCcdPalette.BorderHighlight),
                 shape = RoundedCornerShape(8.dp)
             ) {
@@ -444,7 +478,7 @@ private fun EditorTopBar(
                     imageVector = Icons.Rounded.Save,
                     contentDescription = null,
                     tint = ProCcdPalette.LedCyan,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
@@ -459,7 +493,7 @@ private fun EditorTopBar(
             Button(
                 onClick = onExportToGallery,
                 enabled = !isExporting,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
                 colors =
                 ButtonDefaults.buttonColors(
                     containerColor = ProCcdPalette.WarmAmber,
@@ -470,7 +504,7 @@ private fun EditorTopBar(
                 Icon(
                     imageVector = Icons.Rounded.Download,
                     contentDescription = null,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(15.dp)
                 )
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(
@@ -613,11 +647,16 @@ private fun EditorPreviewViewport(
             )
         } else {
             val activeBitmap = previewBitmap ?: fallbackBitmap
+            val fallbackRot =
+                if (previewBitmap == null) renderParams.opticalSettings.rotationDegrees.toFloat() else 0f
             Image(
                 bitmap = activeBitmap.asImageBitmap(),
                 contentDescription = "Studio Preview",
                 contentScale = ContentScale.Fit,
-                modifier = transformModifier
+                modifier =
+                transformModifier.graphicsLayer {
+                    rotationZ = fallbackRot
+                }
             )
         }
 
@@ -1261,12 +1300,13 @@ private fun FrameAndLensDeck(recipe: CaptureRecipe, onRecipeChange: (CaptureReci
             }
         }
 
-        HardwareSectionLabel(text = "FRAME BORDERS (${FrameBorderStyle.entries.size})")
+        val singlePhotoFrames = remember { GalleryRecipeReducer.singlePhotoFrameStyles() }
+        HardwareSectionLabel(text = "FRAME BORDERS (${singlePhotoFrames.size})")
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            FrameBorderStyle.entries.forEach { frame ->
+            singlePhotoFrames.forEach { frame ->
                 HardwareChip(
                     label = frameLabel(frame),
                     selected = optics.frameStyle == frame,
