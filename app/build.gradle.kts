@@ -16,9 +16,9 @@ val hasReleaseSigning =
         releaseKeyPassword != null
 
 val ciVersionCode: Int =
-    project.findProperty("aayna.versionCode")?.toString()?.toIntOrNull() ?: 1
+    project.findProperty("aayna.versionCode")?.toString()?.toIntOrNull() ?: 2
 val ciVersionName: String =
-    project.findProperty("aayna.versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "1.0.0"
+    project.findProperty("aayna.versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "2.0.0"
 
 android {
     namespace = "com.themasum.aayna"
@@ -30,6 +30,7 @@ android {
         targetSdk = 36
         versionCode = ciVersionCode
         versionName = ciVersionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
@@ -86,6 +87,7 @@ dependencies {
     implementation(project(":feature:gallery"))
 
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.camera.core)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -101,4 +103,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.runner)
 }
