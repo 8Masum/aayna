@@ -119,4 +119,45 @@ class BitmapDecodeMathTest {
         assertEquals(0, frontAlreadyFlipped.rotationDegrees)
         assertFalse(frontAlreadyFlipped.mirrorHorizontal)
     }
+
+    @Test
+    fun `computeExifTransform respects mirrorFrontCamera and swapFrontMirror quirk`() {
+        val unmirroredFront =
+            BitmapDecodeMath.computeExifTransform(
+                exifOrientation = BitmapDecodeMath.EXIF_ORIENTATION_NORMAL,
+                isFrontCamera = true,
+                mirrorFrontCamera = false,
+                swapFrontMirror = false
+            )
+        assertFalse(unmirroredFront.mirrorHorizontal)
+
+        val quirkSwappedMirrorOn =
+            BitmapDecodeMath.computeExifTransform(
+                exifOrientation = BitmapDecodeMath.EXIF_ORIENTATION_NORMAL,
+                isFrontCamera = true,
+                mirrorFrontCamera = true,
+                swapFrontMirror = true
+            )
+        assertFalse(quirkSwappedMirrorOn.mirrorHorizontal)
+
+        val quirkSwappedMirrorOff =
+            BitmapDecodeMath.computeExifTransform(
+                exifOrientation = BitmapDecodeMath.EXIF_ORIENTATION_ROTATE_90,
+                isFrontCamera = true,
+                mirrorFrontCamera = false,
+                swapFrontMirror = true
+            )
+        assertEquals(90, quirkSwappedMirrorOff.rotationDegrees)
+        assertTrue(quirkSwappedMirrorOff.mirrorHorizontal)
+
+        val rearIgnoresFrontQuirk =
+            BitmapDecodeMath.computeExifTransform(
+                exifOrientation = BitmapDecodeMath.EXIF_ORIENTATION_TRANSPOSE,
+                isFrontCamera = false,
+                mirrorFrontCamera = true,
+                swapFrontMirror = true
+            )
+        assertEquals(90, rearIgnoresFrontQuirk.rotationDegrees)
+        assertTrue(rearIgnoresFrontQuirk.mirrorHorizontal)
+    }
 }

@@ -7,12 +7,24 @@ import android.opengl.GLES30
 import android.opengl.GLUtils
 import com.themasum.aayna.core.model.FrameWindowMeta
 import com.themasum.aayna.core.model.GrungeAtlasMeta
+import com.themasum.aayna.core.model.Lut2dMetaEntry
 import com.themasum.aayna.core.model.StampAtlasMeta
 import org.json.JSONObject
+
+data class Lut2dAtlasMeta(
+    val format: String = "LUT_2D_64x64x8x8",
+    val widthPx: Int = 512,
+    val heightPx: Int = 512,
+    val cubeSize: Int = 64,
+    val tilesX: Int = 8,
+    val tilesY: Int = 8,
+    val luts: Map<String, Lut2dMetaEntry> = emptyMap()
+)
 
 object AssetMetadataLoader {
     const val DEFAULT_STAMP_META_PATH = "stamps/stamp_atlas_meta.json"
     const val DEFAULT_GRUNGE_META_PATH = "grunge/grunge_meta.json"
+    const val DEFAULT_LUTS_2D_META_PATH = "luts_2d/luts_2d_meta.json"
 
     fun loadStampAtlasMeta(assetManager: AssetManager, assetPath: String = DEFAULT_STAMP_META_PATH): StampAtlasMeta {
         val raw = assetManager.open(assetPath).bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -75,6 +87,16 @@ object AssetMetadataLoader {
                     } else {
                         emptyList()
                     }
+                val panelsArr = f.optJSONArray("panels")
+                val panels =
+                    if (panelsArr != null) {
+                        List(panelsArr.length()) { pIdx ->
+                            val panelArr = panelsArr.getJSONArray(pIdx)
+                            List(panelArr.length()) { cIdx -> panelArr.getInt(cIdx) }
+                        }
+                    } else {
+                        emptyList()
+                    }
                 frames[key] =
                     FrameWindowMeta(
                         uMin = f.getDouble("uMin").toFloat(),
@@ -83,7 +105,8 @@ object AssetMetadataLoader {
                         vMax = f.getDouble("vMax").toFloat(),
                         widthPx = f.getInt("widthPx"),
                         heightPx = f.getInt("heightPx"),
-                        windowPx = windowPx
+                        windowPx = windowPx,
+                        panels = panels
                     )
             }
         }
@@ -91,6 +114,51 @@ object AssetMetadataLoader {
         return GrungeAtlasMeta(
             textures = textures,
             frames = frames
+        )
+    }
+
+    fun loadLut2dMeta(assetManager: AssetManager, assetPath: String = DEFAULT_LUTS_2D_META_PATH): Lut2dAtlasMeta {
+        val raw = assetManager.open(assetPath).bufferedReader(Charsets.UTF_8).use { it.readText() }
+        return parseLut2dMeta(raw)
+    }
+
+    fun parseLut2dMeta(rawJson: String): Lut2dAtlasMeta {
+        val root = JSONObject(rawJson)
+        val widthPx = root.optInt("width", 512)
+        val heightPx = root.optInt("height", 512)
+        val cubeSize = root.optInt("cubeSize", 64)
+        val tilesX = root.optInt("tilesX", 8)
+        val tilesY = root.optInt("tilesY", 8)
+        val format = root.optString("format", "LUT_2D_64x64x8x8")
+
+        val luts = mutableMapOf<String, Lut2dMetaEntry>()
+        val lutsObj = root.optJSONObject("luts")
+        if (lutsObj != null) {
+            val keys = lutsObj.keys()
+            while (keys.hasNext()) {
+                val id = keys.next()
+                val entry = lutsObj.getJSONObject(id)
+                luts[id] =
+                    Lut2dMetaEntry(
+                        id = id,
+                        assetPath = entry.getString("file"),
+                        cubeSize = cubeSize,
+                        gridColumns = tilesX,
+                        gridRows = tilesY,
+                        widthPx = widthPx,
+                        heightPx = heightPx
+                    )
+            }
+        }
+
+        return Lut2dAtlasMeta(
+            format = format,
+            widthPx = widthPx,
+            heightPx = heightPx,
+            cubeSize = cubeSize,
+            tilesX = tilesX,
+            tilesY = tilesY,
+            luts = luts
         )
     }
 

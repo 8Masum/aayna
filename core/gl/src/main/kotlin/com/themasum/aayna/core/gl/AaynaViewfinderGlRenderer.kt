@@ -39,6 +39,10 @@ class AaynaViewfinderGlRenderer(
     fun currentSurfaceTexture(): SurfaceTexture? = surfaceTexture
 
     override fun onSurfaceCreated(gl: GL10?, config: EGLConfig?) {
+        // Release any previous SurfaceTexture / OES / engine cleanly before recreating
+        release()
+        framePending.set(false)
+
         GLES30.glClearColor(0f, 0f, 0f, 1f)
 
         val texIds = IntArray(1)
@@ -91,14 +95,8 @@ class AaynaViewfinderGlRenderer(
         val fourPass = engine ?: return
         if (surfaceWidth <= 0 || surfaceHeight <= 0) return
 
-        val aspect = params.opticalSettings.aspectRatio
         val isPortraitSurface = surfaceHeight > surfaceWidth
-        val targetRatio =
-            if (isPortraitSurface) {
-                aspect.heightRatio.toFloat() / aspect.widthRatio.toFloat()
-            } else {
-                aspect.widthRatio.toFloat() / aspect.heightRatio.toFloat()
-            }
+        val targetRatio = GlMath.computeEffectiveAspectRatio(params.opticalSettings, isPortraitSurface)
         val surfaceRatio = surfaceWidth.toFloat() / surfaceHeight.toFloat()
 
         val (vpW, vpH) =

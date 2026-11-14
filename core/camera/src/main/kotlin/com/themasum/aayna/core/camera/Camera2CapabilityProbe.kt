@@ -2,8 +2,8 @@ package com.themasum.aayna.core.camera
 
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
-import android.hardware.camera2.CaptureRequest
 import com.themasum.aayna.core.model.CameraCapabilityInfo
+import com.themasum.aayna.core.model.DeviceQuirkFlags
 
 internal data class CameraHardwareBounds(
     val cameraId: String,
@@ -32,25 +32,36 @@ object Camera2CapabilityProbe {
     private const val DEFAULT_MIN_EXPOSURE_NS = 1_000_000L
     private const val DEFAULT_MAX_EXPOSURE_NS = 250_000_000L
 
-    fun probeCapabilityInfo(cameraManager: CameraManager, cameraId: String): CameraCapabilityInfo =
-        probe(cameraManager, cameraId).capabilityInfo
+    fun probeCapabilityInfo(
+        cameraManager: CameraManager,
+        cameraId: String,
+        quirkFlags: DeviceQuirkFlags = DeviceQuirkFlags()
+    ): CameraCapabilityInfo = probe(cameraManager, cameraId, quirkFlags).capabilityInfo
 
-    fun probeCharacteristics(cameraId: String, characteristics: CameraCharacteristics): CameraCapabilityInfo =
-        probeCharacteristicsDetailed(cameraId, characteristics).capabilityInfo
+    fun probeCharacteristics(
+        cameraId: String,
+        characteristics: CameraCharacteristics,
+        quirkFlags: DeviceQuirkFlags = DeviceQuirkFlags()
+    ): CameraCapabilityInfo = probeCharacteristicsDetailed(cameraId, characteristics, quirkFlags).capabilityInfo
 
-    internal fun probe(cameraManager: CameraManager, cameraId: String): CameraProbeResult {
+    internal fun probe(
+        cameraManager: CameraManager,
+        cameraId: String,
+        quirkFlags: DeviceQuirkFlags = DeviceQuirkFlags()
+    ): CameraProbeResult {
         val characteristics =
             try {
                 cameraManager.getCameraCharacteristics(cameraId)
             } catch (_: Exception) {
                 return fallbackProbeResult(cameraId)
             }
-        return probeCharacteristicsDetailed(cameraId, characteristics)
+        return probeCharacteristicsDetailed(cameraId, characteristics, quirkFlags)
     }
 
     internal fun probeCharacteristicsDetailed(
         cameraId: String,
-        characteristics: CameraCharacteristics
+        characteristics: CameraCharacteristics,
+        quirkFlags: DeviceQuirkFlags = DeviceQuirkFlags()
     ): CameraProbeResult {
         val hardwareLevel =
             mapHardwareLevel(
@@ -99,14 +110,17 @@ object Camera2CapabilityProbe {
         val edgeModes =
             safeGet(characteristics, CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES)
                 ?: IntArray(0)
-        val (preferredEdgeMode, edgeLabel) = resolvePreferredEdgeMode(edgeModes)
-
         val nrModes =
             safeGet(
                 characteristics,
                 CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES
             ) ?: IntArray(0)
-        val (preferredNrMode, nrLabel) = resolvePreferredNoiseReductionMode(nrModes)
+        val ispDecision =
+            CameraPolicyMath.resolveIspOverrides(
+                availableEdgeModes = edgeModes,
+                availableNoiseReductionModes = nrModes,
+                quirkFlags = quirkFlags
+            )
 
         val hasFlashUnit =
             safeGet(characteristics, CameraCharacteristics.FLASH_INFO_AVAILABLE) ?: false
@@ -120,8 +134,8 @@ object Camera2CapabilityProbe {
                 hasManualSensor = hasManualSensor,
                 isoRange = isoRangeText,
                 exposureRangeNs = exposureRangeText,
-                edgeModeApplied = edgeLabel,
-                noiseReductionApplied = nrLabel
+                edgeModeApplied = ispDecision.edgeModeLabel,
+                noiseReductionApplied = ispDecision.noiseReductionLabel
             )
         val bounds =
             CameraHardwareBounds(
@@ -137,40 +151,12 @@ object Camera2CapabilityProbe {
                 aeCompensationStepNumerator = aeStep?.numerator ?: 1,
                 aeCompensationStepDenominator = aeStep?.denominator ?: 1,
                 supportedAwbModes = awbModes,
-                preferredEdgeMode = preferredEdgeMode,
-                preferredNoiseReductionMode = preferredNrMode,
+                preferredEdgeMode = ispDecision.edgeMode,
+                preferredNoiseReductionMode = ispDecision.noiseReductionMode,
                 hasFlashUnit = hasFlashUnit,
                 sensorOrientationDegrees = sensorOrientation
             )
         return CameraProbeResult(capabilityInfo = capabilityInfo, bounds = bounds)
-    }
-
-    private fun resolvePreferredEdgeMode(availableModes: IntArray): Pair<Int?, String> = when {
-        availableModes.contains(CaptureRequest.EDGE_MODE_OFF) -> {
-            CaptureRequest.EDGE_MODE_OFF to "OFF"
-        }
-
-        availableModes.contains(CaptureRequest.EDGE_MODE_FAST) -> {
-            CaptureRequest.EDGE_MODE_FAST to "FAST"
-        }
-
-        else -> {
-            null to "DEFAULT"
-        }
-    }
-
-    private fun resolvePreferredNoiseReductionMode(availableModes: IntArray): Pair<Int?, String> = when {
-        availableModes.contains(CaptureRequest.NOISE_REDUCTION_MODE_OFF) -> {
-            CaptureRequest.NOISE_REDUCTION_MODE_OFF to "OFF"
-        }
-
-        availableModes.contains(CaptureRequest.NOISE_REDUCTION_MODE_MINIMAL) -> {
-            CaptureRequest.NOISE_REDUCTION_MODE_MINIMAL to "MINIMAL"
-        }
-
-        else -> {
-            null to "DEFAULT"
-        }
     }
 
     private fun mapHardwareLevel(level: Int?): String = when (level) {

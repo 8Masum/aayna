@@ -1,6 +1,119 @@
 package com.themasum.aayna.core.gl
 
 object GlShaderSources {
+    val PASS1_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uInputTex",
+            "uTexMatrix",
+            "uCropScale",
+            "uInputAspect",
+            "uTargetAspect",
+            "uStraightenRad",
+            "uStraightenScale",
+            "uLensMode",
+            "uFisheyeStrength",
+            "uCaStrength",
+            "uBradfordMatrix",
+            "uFlashSimStrength",
+            "uHighlights",
+            "uShadows"
+        )
+
+    val PASS2_THRESHOLD_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uFbo1Tex",
+            "uBloomThreshold",
+            "uBloomTint"
+        )
+
+    val PASS2_BLUR_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uSourceTex",
+            "uTexelStep"
+        )
+
+    val PASS2_STAR_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uFboHiTex",
+            "uTexelSize",
+            "uStarPoints"
+        )
+
+    val PASS3_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uFbo1Tex",
+            "uLut2dTex",
+            "uLut3dTex",
+            "uUse2dLut",
+            "uLutSize",
+            "uLutTiles",
+            "uLutTexSize",
+            "uEvStops",
+            "uFboHiTex",
+            "uFboStarTex",
+            "uBloomIntensity",
+            "uStarIntensity",
+            "uBeautySoftness",
+            "uSharpenStrength",
+            "uTexelSize"
+        )
+
+    val PASS4_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uFbo2Tex",
+            "uFbo1Tex",
+            "uLightLeakTex",
+            "uDustTex",
+            "uDvScanlineTex",
+            "uFrameTex",
+            "uStampAtlasTex",
+            "uOutputSize",
+            "uTargetAspect",
+            "uGrainType",
+            "uLumaGrainStrength",
+            "uChromaGrainStrength",
+            "uShaderNoiseBoost",
+            "uVignetteStrength",
+            "uLightLeakIntensity",
+            "uDustIntensity",
+            "uRandomSeed",
+            "uHasFrame",
+            "uFrameWindow",
+            "uPhotoPanels",
+            "uStampEnabled",
+            "uStampLength",
+            "uStampIndices",
+            "uStampColor",
+            "uStampGlowStrength",
+            "uStampPosition",
+            "uStampCleanSans",
+            "uAtlasGrid",
+            "uAtlasSize",
+            "uCellSize",
+            "uGlyphPadding",
+            "uSplitCompareRatio",
+            "uHoldOriginal"
+        )
+
+    val PASS_OVERLAY_UNIFORM_NAMES: List<String> =
+        listOf(
+            "uBaseTex",
+            "uFrameTex",
+            "uStampAtlasTex",
+            "uTargetAspect",
+            "uStampEnabled",
+            "uStampLength",
+            "uStampIndices",
+            "uStampColor",
+            "uStampGlowStrength",
+            "uStampPosition",
+            "uStampCleanSans",
+            "uAtlasGrid",
+            "uAtlasSize",
+            "uCellSize",
+            "uGlyphPadding"
+        )
+
     const val PASS1_VERTEX_SHADER = """#version 300 es
 layout(location = 0) in vec2 aPosition;
 layout(location = 1) in vec2 aTexCoord;
@@ -41,14 +154,17 @@ uniform sampler2D uInputTex;
 
 uniform mat4 uTexMatrix;
 uniform vec2 uCropScale;
+uniform float uInputAspect;
 uniform float uTargetAspect;
+uniform float uStraightenRad;
+uniform float uStraightenScale;
+uniform int uLensMode;
 uniform float uFisheyeStrength;
 uniform float uCaStrength;
-uniform float uWbTemp;
-uniform float uWbTint;
-uniform float uWarmthShift;
-uniform float uExposureStops;
+uniform mat3 uBradfordMatrix;
 uniform float uFlashSimStrength;
+uniform float uHighlights;
+uniform float uShadows;
 
 vec2 toSourceUv(vec2 fboUv) {
     return (uTexMatrix * vec4(fboUv, 0.0, 1.0)).xy;
@@ -58,6 +174,32 @@ void main() {
     vec2 uv = vFboUv;
     float edgeMask = 1.0;
 
+    // Multi-lens contact grid modes (7 = GRID_2X, 8 = GRID_4X)
+    if (uLensMode == 7) {
+        uv = fract(uv * 2.0);
+        float border = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+        edgeMask *= smoothstep(0.0, 0.012, border);
+    } else if (uLensMode == 8) {
+        uv = fract(uv * 4.0);
+        float border = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
+        edgeMask *= smoothstep(0.0, 0.018, border);
+    }
+
+    // 6-fold kaleidoscope symmetry (6 = KALEIDOSCOPE)
+    if (uLensMode == 6) {
+        vec2 p = (uv - 0.5) * vec2(uTargetAspect, 1.0);
+        float r = length(p);
+        float theta = atan(p.y, p.x);
+        float sector = 1.04719755; // PI / 3.0
+        theta = mod(theta + 6.2831853, sector);
+        if (theta > sector * 0.5) {
+            theta = sector - theta;
+        }
+        vec2 kp = vec2(cos(theta), sin(theta)) * r;
+        uv = clamp(kp / vec2(uTargetAspect, 1.0) + 0.5, 0.0, 1.0);
+    }
+
+    // Fisheye barrel distortion
     if (uFisheyeStrength > 0.001) {
         vec2 centered = (uv - 0.5) * 2.0;
         centered.x *= uTargetAspect;
@@ -69,11 +211,21 @@ void main() {
         warped.x /= uTargetAspect;
         uv = warped * 0.5 + 0.5;
         if (uFisheyeStrength > 0.4) {
-            edgeMask = 1.0 - smoothstep(0.92, 1.04, rNorm * (1.0 + uFisheyeStrength * 0.15));
+            edgeMask *= 1.0 - smoothstep(0.92, 1.04, rNorm * (1.0 + uFisheyeStrength * 0.15));
         }
     }
 
     vec2 croppedUv = (uv - 0.5) * uCropScale + 0.5;
+
+    // Straighten rotation with inscribed auto-zoom to avoid black corner triangles
+    if (abs(uStraightenRad) > 0.0001) {
+        float safeInputAspect = max(uInputAspect, 0.2);
+        vec2 sp = (croppedUv - 0.5) * vec2(safeInputAspect, 1.0) * uStraightenScale;
+        float cR = cos(uStraightenRad);
+        float sR = sin(uStraightenRad);
+        vec2 rotP = vec2(sp.x * cR - sp.y * sR, sp.x * sR + sp.y * cR);
+        croppedUv = rotP / vec2(safeInputAspect, 1.0) + 0.5;
+    }
 
     vec2 delta = croppedUv - 0.5;
     float r2 = dot(delta, delta);
@@ -88,15 +240,30 @@ void main() {
     float bChan = texture(uInputTex, toSourceUv(uvB)).b;
     vec3 color = vec3(rChan, gChan, bChan);
 
-    // Pre-LUT White Balance & Warmth
-    float temp = uWbTemp + uWarmthShift * 0.25;
-    float tint = uWbTint;
-    color.r *= (1.0 + temp * 0.35 - tint * 0.10);
-    color.g *= (1.0 + tint * 0.24);
-    color.b *= (1.0 - temp * 0.35 - tint * 0.10);
+    // Prism spectral dispersion refraction (5 = PRISM)
+    if (uLensMode == 5) {
+        float pEdge = smoothstep(0.14, 0.72, length(delta));
+        vec2 pShift = vec2(0.065, -0.045) * (0.35 + pEdge);
+        float prR = texture(uInputTex, toSourceUv(clamp(croppedUv + pShift * 1.18, 0.0, 1.0))).r;
+        float prG = texture(uInputTex, toSourceUv(clamp(croppedUv + pShift, 0.0, 1.0))).g;
+        float prB = texture(uInputTex, toSourceUv(clamp(croppedUv + pShift * 0.82, 0.0, 1.0))).b;
+        vec3 prismColor = vec3(prR, prG, prB);
+        color = mix(color, max(color, prismColor), 0.35 + 0.45 * pEdge);
+    }
 
-    // Pre-LUT EV & Fallback Digital Exposure
-    color *= exp2(uExposureStops);
+    // Bradford XYZ Chromatic Adaptation White Balance (linear sRGB space)
+    vec3 lin = pow(max(color, vec3(0.0)), vec3(2.2));
+    lin = max(uBradfordMatrix * lin, vec3(0.0));
+    color = pow(lin, vec3(1.0 / 2.2));
+
+    // Tonal Highlights & Shadows curve
+    if (abs(uShadows) > 0.001 || abs(uHighlights) > 0.001) {
+        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        float shadowMask = pow(1.0 - clamp(luma, 0.0, 1.0), 2.2);
+        float highlightMask = pow(clamp(luma, 0.0, 1.0), 2.2);
+        float tonalStops = uShadows * shadowMask * 1.10 + uHighlights * highlightMask * 0.90;
+        color *= exp2(tonalStops);
+    }
 
     // Direct-Flash Simulation: radial spotlight punch + dark background falloff
     if (uFlashSimStrength > 0.001) {
@@ -105,8 +272,8 @@ void main() {
         float centerPunch = exp(-d * d * 2.4) * 0.52 * uFlashSimStrength;
         float bgFalloff = mix(1.0, smoothstep(1.45, 0.25, d) * 0.62 + 0.38, uFlashSimStrength);
         color *= (bgFalloff + centerPunch);
-        float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
-        color = mix(color, color * vec3(0.98, 1.0, 1.04), smoothstep(0.6, 1.0, luma) * 0.35 * uFlashSimStrength);
+        float flashLuma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+        color = mix(color, color * vec3(0.98, 1.0, 1.04), smoothstep(0.6, 1.0, flashLuma) * 0.35 * uFlashSimStrength);
     }
 
     color *= edgeMask;
@@ -133,6 +300,7 @@ void main() {
 }
 """
 
+    // 11-tap separable Gaussian halation blur (sigma ~ 2.5, normalized sum = 1.0)
     const val PASS2_BLUR_FRAGMENT_SHADER = """#version 300 es
 precision highp float;
 
@@ -143,11 +311,17 @@ uniform sampler2D uSourceTex;
 uniform vec2 uTexelStep;
 
 void main() {
-    vec3 sum = texture(uSourceTex, vTexCoord).rgb * 0.227027;
-    sum += texture(uSourceTex, vTexCoord + uTexelStep * 1.384615).rgb * 0.316216;
-    sum += texture(uSourceTex, vTexCoord - uTexelStep * 1.384615).rgb * 0.316216;
-    sum += texture(uSourceTex, vTexCoord + uTexelStep * 3.230769).rgb * 0.070270;
-    sum += texture(uSourceTex, vTexCoord - uTexelStep * 3.230769).rgb * 0.070270;
+    vec3 sum = texture(uSourceTex, vTexCoord).rgb * 0.164466;
+    sum += (texture(uSourceTex, vTexCoord + uTexelStep * 1.0).rgb +
+            texture(uSourceTex, vTexCoord - uTexelStep * 1.0).rgb) * 0.151655;
+    sum += (texture(uSourceTex, vTexCoord + uTexelStep * 2.0).rgb +
+            texture(uSourceTex, vTexCoord - uTexelStep * 2.0).rgb) * 0.119115;
+    sum += (texture(uSourceTex, vTexCoord + uTexelStep * 3.0).rgb +
+            texture(uSourceTex, vTexCoord - uTexelStep * 3.0).rgb) * 0.079655;
+    sum += (texture(uSourceTex, vTexCoord + uTexelStep * 4.0).rgb +
+            texture(uSourceTex, vTexCoord - uTexelStep * 4.0).rgb) * 0.045350;
+    sum += (texture(uSourceTex, vTexCoord + uTexelStep * 5.0).rgb +
+            texture(uSourceTex, vTexCoord - uTexelStep * 5.0).rgb) * 0.021992;
     fragColor = vec4(sum, 1.0);
 }
 """
@@ -201,29 +375,180 @@ in vec2 vTexCoord;
 out vec4 fragColor;
 
 uniform sampler2D uFbo1Tex;
-uniform sampler3D uLutTex;
+uniform sampler2D uLut2dTex;
+uniform sampler3D uLut3dTex;
+uniform int uUse2dLut;
+uniform float uLutSize;
+uniform vec2 uLutTiles;
+uniform vec2 uLutTexSize;
+uniform float uEvStops;
 uniform sampler2D uFboHiTex;
 uniform sampler2D uFboStarTex;
-uniform float uLutSize;
 uniform float uBloomIntensity;
 uniform float uStarIntensity;
+uniform float uBeautySoftness;
+uniform float uSharpenStrength;
+uniform vec2 uTexelSize;
+
+vec3 applyBilateralBeauty(vec2 uv, vec3 center) {
+    vec2 stepUv = uTexelSize * (1.2 + uBeautySoftness * 1.4);
+    float sigmaR2 = 0.012 + uBeautySoftness * 0.028;
+    vec3 sum = center * 1.0;
+    float weightSum = 1.0;
+
+    vec2 offsets[8];
+    offsets[0] = vec2(-1.0, -1.0);
+    offsets[1] = vec2(0.0, -1.0);
+    offsets[2] = vec2(1.0, -1.0);
+    offsets[3] = vec2(-1.0, 0.0);
+    offsets[4] = vec2(1.0, 0.0);
+    offsets[5] = vec2(-1.0, 1.0);
+    offsets[6] = vec2(0.0, 1.0);
+    offsets[7] = vec2(1.0, 1.0);
+
+    for (int i = 0; i < 8; i++) {
+        vec3 s = texture(uFbo1Tex, clamp(uv + offsets[i] * stepUv, 0.0, 1.0)).rgb;
+        vec3 diff = s - center;
+        float spatialW = (i == 1 || i == 3 || i == 4 || i == 6) ? 0.85 : 0.60;
+        float rangeW = exp(-dot(diff, diff) / sigmaR2);
+        float w = spatialW * rangeW;
+        sum += s * w;
+        weightSum += w;
+    }
+
+    return mix(center, sum / max(weightSum, 1e-4), uBeautySoftness * 0.85);
+}
+
+vec3 sampleLut2d(vec3 rgb) {
+    float n = max(uLutSize, 2.0);
+    float maxIdx = n - 1.0;
+    float blueScaled = clamp(rgb.b, 0.0, 1.0) * maxIdx;
+    float b0 = floor(blueScaled);
+    float b1 = min(b0 + 1.0, maxIdx);
+    float fracB = blueScaled - b0;
+
+    float tilesX = max(uLutTiles.x, 1.0);
+    vec2 tile0 = vec2(mod(b0, tilesX), floor(b0 / tilesX));
+    vec2 tile1 = vec2(mod(b1, tilesX), floor(b1 / tilesX));
+
+    vec2 inTilePx = clamp(rgb.rg, 0.0, 1.0) * maxIdx + 0.5;
+    vec2 uv0 = (tile0 * n + inTilePx) / max(uLutTexSize, vec2(1.0));
+    vec2 uv1 = (tile1 * n + inTilePx) / max(uLutTexSize, vec2(1.0));
+
+    vec3 c0 = texture(uLut2dTex, uv0).rgb;
+    vec3 c1 = texture(uLut2dTex, uv1).rgb;
+    return mix(c0, c1, fracB);
+}
+
+vec3 sampleLut3d(vec3 rgb) {
+    float n = max(uLutSize, 2.0);
+    vec3 lutCoord = clamp(rgb, 0.0, 1.0) * ((n - 1.0) / n) + (0.5 / n);
+    return texture(uLut3dTex, lutCoord).rgb;
+}
 
 void main() {
-    vec3 baseColor = texture(uFbo1Tex, vTexCoord).rgb;
-    float n = max(uLutSize, 2.0);
-    vec3 lutCoord = clamp(baseColor, 0.0, 1.0) * ((n - 1.0) / n) + (0.5 / n);
-    vec3 graded = texture(uLutTex, lutCoord).rgb;
+    vec3 centerColor = texture(uFbo1Tex, vTexCoord).rgb;
+    vec3 baseColor = (uBeautySoftness > 0.001)
+        ? applyBilateralBeauty(vTexCoord, centerColor)
+        : centerColor;
+
+    // Inline EV scaling before LUT grading
+    vec3 evScaled = clamp(baseColor * pow(2.0, uEvStops), 0.0, 1.0);
+
+    vec3 graded = (uUse2dLut == 1)
+        ? sampleLut2d(evScaled)
+        : sampleLut3d(evScaled);
 
     // Gentle CCD highlight roll-off
     vec3 excess = max(graded - vec3(0.84), vec3(0.0));
     graded -= excess * 0.22;
 
+    // Unsharp mask sharpen
+    if (uSharpenStrength > 0.001) {
+        vec3 nUp = texture(uFbo1Tex, clamp(vTexCoord + vec2(0.0, uTexelSize.y), 0.0, 1.0)).rgb;
+        vec3 nDown = texture(uFbo1Tex, clamp(vTexCoord - vec2(0.0, uTexelSize.y), 0.0, 1.0)).rgb;
+        vec3 nLeft = texture(uFbo1Tex, clamp(vTexCoord - vec2(uTexelSize.x, 0.0), 0.0, 1.0)).rgb;
+        vec3 nRight = texture(uFbo1Tex, clamp(vTexCoord + vec2(uTexelSize.x, 0.0), 0.0, 1.0)).rgb;
+        vec3 avg4 = 0.25 * (nUp + nDown + nLeft + nRight);
+        vec3 detail = clamp(centerColor - avg4, vec3(-0.25), vec3(0.25));
+        graded = clamp(graded + detail * (uSharpenStrength * 1.15), 0.0, 1.0);
+    }
+
+    // Stage 4 halation highlight compose
     vec3 bloom = texture(uFboHiTex, vTexCoord).rgb * uBloomIntensity;
     vec3 star = texture(uFboStarTex, vTexCoord).rgb * uStarIntensity;
     vec3 glow = clamp(bloom + star, 0.0, 1.0);
     vec3 composited = 1.0 - (1.0 - graded) * (1.0 - glow);
 
     fragColor = vec4(clamp(composited, 0.0, 1.0), 1.0);
+}
+"""
+
+    private const val STAMP_HELPER_GLSL = """
+vec3 renderStampOverlay(vec3 color, vec2 photoUv, float targetAspect) {
+    if (uStampEnabled <= 0.5 || uStampLength <= 0) {
+        return color;
+    }
+    float charH = 0.044;
+    float charW = charH / max(targetAspect, 0.5) * 0.78;
+    float stepX = charW * 0.92;
+    float totalW = float(uStampLength) * stepX;
+
+    // 0 = BOTTOM_RIGHT, 1 = BOTTOM_LEFT, 2 = TOP_RIGHT, 3 = TOP_LEFT
+    float startX = (uStampPosition == 1 || uStampPosition == 3)
+        ? 0.055
+        : (0.945 - totalW);
+    float endX = startX + totalW;
+    float startY = (uStampPosition == 2 || uStampPosition == 3)
+        ? (0.945 - charH)
+        : 0.055;
+    float haloPad = 0.012;
+
+    if (photoUv.x >= startX - haloPad && photoUv.x <= endX + haloPad &&
+        photoUv.y >= startY - haloPad && photoUv.y <= startY + charH + haloPad) {
+        float relX = (photoUv.x - startX) / stepX;
+        int slot = int(floor(relX));
+        float localX = fract(relX);
+        float localY = (photoUv.y - startY) / charH;
+
+        if (slot >= 0 && slot < uStampLength && localX >= 0.0 && localX <= 1.0 && localY >= 0.0 && localY <= 1.0) {
+            int charIdx = uStampIndices[slot];
+            int cols = max(int(uAtlasGrid.x), 1);
+            int col = charIdx % cols;
+            int row = charIdx / cols;
+
+            float padU = uGlyphPadding / uAtlasSize.x;
+            float padV = uGlyphPadding / uAtlasSize.y;
+            float cellU = uCellSize.x / uAtlasSize.x;
+            float cellV = uCellSize.y / uAtlasSize.y;
+
+            float uMin = float(col) * cellU + padU;
+            float uMax = float(col + 1) * cellU - padU;
+            float vMin = float(row) * cellV + padV;
+            float vMax = float(row + 1) * cellV - padV;
+
+            // Flip localY for top-down Bitmap atlas
+            vec2 glyphUv = vec2(mix(uMin, uMax, localX), mix(vMax, vMin, localY));
+            float rawAlpha = texture(uStampAtlasTex, glyphUv).a;
+            float coreAlpha = (uStampCleanSans > 0.5)
+                ? smoothstep(0.30, 0.70, rawAlpha)
+                : rawAlpha;
+
+            float haloAlpha = 0.0;
+            if (uStampGlowStrength > 0.001 && uStampCleanSans <= 0.5) {
+                vec2 stepUv = vec2(2.0 / uAtlasSize.x, 2.0 / uAtlasSize.y);
+                haloAlpha += texture(uStampAtlasTex, clamp(glyphUv + vec2(stepUv.x, 0.0), vec2(uMin, vMin), vec2(uMax, vMax))).a;
+                haloAlpha += texture(uStampAtlasTex, clamp(glyphUv - vec2(stepUv.x, 0.0), vec2(uMin, vMin), vec2(uMax, vMax))).a;
+                haloAlpha += texture(uStampAtlasTex, clamp(glyphUv + vec2(0.0, stepUv.y), vec2(uMin, vMin), vec2(uMax, vMax))).a;
+                haloAlpha += texture(uStampAtlasTex, clamp(glyphUv - vec2(0.0, stepUv.y), vec2(uMin, vMin), vec2(uMax, vMax))).a;
+                haloAlpha *= 0.25 * uStampGlowStrength * 0.65;
+            }
+
+            float totalAlpha = clamp(coreAlpha + haloAlpha, 0.0, 1.0);
+            color = mix(color, uStampColor, totalAlpha * 0.92) + uStampColor * haloAlpha * 0.35;
+        }
+    }
+    return color;
 }
 """
 
@@ -237,6 +562,7 @@ uniform sampler2D uFbo2Tex;
 uniform sampler2D uFbo1Tex;
 uniform sampler2D uLightLeakTex;
 uniform sampler2D uDustTex;
+uniform sampler2D uDvScanlineTex;
 uniform sampler2D uFrameTex;
 uniform sampler2D uStampAtlasTex;
 
@@ -251,14 +577,18 @@ uniform float uLightLeakIntensity;
 uniform float uDustIntensity;
 uniform float uRandomSeed;
 
-uniform float uHasFrame;
+// 0 = NONE, 1 = SINGLE_WINDOW_FRAME, 2 = DV_TIMECODE, 3 = PHOTO_BOOTH_4STRIP
+uniform int uHasFrame;
 uniform vec4 uFrameWindow;
+uniform vec4 uPhotoPanels[4];
 
 uniform float uStampEnabled;
 uniform int uStampLength;
 uniform int uStampIndices[24];
 uniform vec3 uStampColor;
 uniform float uStampGlowStrength;
+uniform int uStampPosition;
+uniform float uStampCleanSans;
 uniform vec2 uAtlasGrid;
 uniform vec2 uAtlasSize;
 uniform vec2 uCellSize;
@@ -284,11 +614,11 @@ vec2 transformGrungeUv(vec2 uv, float seedOffset) {
     vec2 shift = vec2(fract(s * 3.7) - 0.5, fract(s * 5.9) - 0.5) * 0.12;
     return clamp(outUv + shift, 0.0, 1.0);
 }
-
-vec3 applyEffects(vec2 photoUv) {
+""" + STAMP_HELPER_GLSL + """
+vec3 applyEffects(vec2 photoUv, bool drawStamp) {
     vec3 color = texture(uFbo2Tex, photoUv).rgb;
 
-    // 1. Sensor Noise / Film Grain (post-LUT)
+    // 1. Sensor Noise / Film Grain (post-LUT, fast hash12 temporal grain)
     float noiseAmp = 1.0 + uShaderNoiseBoost;
     vec2 pixelCoord = floor(photoUv * uOutputSize);
     vec2 seedVec = vec2(fract(uRandomSeed * 0.0137), fract(uRandomSeed * 0.0293)) * 256.0;
@@ -302,7 +632,7 @@ vec3 applyEffects(vec2 photoUv) {
         color.r += rN * uChromaGrainStrength * 0.16 * noiseAmp;
         color.b += bN * uChromaGrainStrength * 0.16 * noiseAmp;
     } else {
-        // FILM_ORGANIC (slightly softer 2x2 clump blend)
+        // FILM_ORGANIC
         vec2 clumpCoord = floor(pixelCoord * 0.65);
         float n1 = hash12(pixelCoord + seedVec) - 0.5;
         float n2 = hash12(clumpCoord + seedVec + vec2(23.0, 41.0)) - 0.5;
@@ -333,60 +663,30 @@ vec3 applyEffects(vec2 photoUv) {
         color = 1.0 - (1.0 - clamp(color, 0.0, 1.0)) * (1.0 - clamp(dust, 0.0, 1.0));
     }
 
-    // 4. Date Stamp (dot_matrix / seven_segment atlas)
-    if (uStampEnabled > 0.5 && uStampLength > 0) {
-        float charH = 0.044;
-        float charW = charH / max(uTargetAspect, 0.5) * 0.78;
-        float stepX = charW * 0.92;
-        float endX = 0.945;
-        float startX = endX - float(uStampLength) * stepX;
-        float startY = 0.055;
-        float haloPad = 0.012;
-
-        if (photoUv.x >= startX - haloPad && photoUv.x <= endX + haloPad &&
-            photoUv.y >= startY - haloPad && photoUv.y <= startY + charH + haloPad) {
-            float relX = (photoUv.x - startX) / stepX;
-            int slot = int(floor(relX));
-            float localX = fract(relX);
-            float localY = (photoUv.y - startY) / charH;
-
-            if (slot >= 0 && slot < uStampLength && localX >= 0.0 && localX <= 1.0 && localY >= 0.0 && localY <= 1.0) {
-                int charIdx = uStampIndices[slot];
-                int cols = int(uAtlasGrid.x);
-                int col = charIdx % cols;
-                int row = charIdx / cols;
-
-                float padU = uGlyphPadding / uAtlasSize.x;
-                float padV = uGlyphPadding / uAtlasSize.y;
-                float cellU = uCellSize.x / uAtlasSize.x;
-                float cellV = uCellSize.y / uAtlasSize.y;
-
-                float uMin = float(col) * cellU + padU;
-                float uMax = float(col + 1) * cellU - padU;
-                float vMin = float(row) * cellV + padV;
-                float vMax = float(row + 1) * cellV - padV;
-
-                // Flip localY for top-down Bitmap atlas
-                vec2 glyphUv = vec2(mix(uMin, uMax, localX), mix(vMax, vMin, localY));
-                float coreAlpha = texture(uStampAtlasTex, glyphUv).a;
-
-                float haloAlpha = 0.0;
-                if (uStampGlowStrength > 0.001) {
-                    vec2 stepUv = vec2(2.0 / uAtlasSize.x, 2.0 / uAtlasSize.y);
-                    haloAlpha += texture(uStampAtlasTex, clamp(glyphUv + vec2(stepUv.x, 0.0), vec2(uMin, vMin), vec2(uMax, vMax))).a;
-                    haloAlpha += texture(uStampAtlasTex, clamp(glyphUv - vec2(stepUv.x, 0.0), vec2(uMin, vMin), vec2(uMax, vMax))).a;
-                    haloAlpha += texture(uStampAtlasTex, clamp(glyphUv + vec2(0.0, stepUv.y), vec2(uMin, vMin), vec2(uMax, vMax))).a;
-                    haloAlpha += texture(uStampAtlasTex, clamp(glyphUv - vec2(0.0, stepUv.y), vec2(uMin, vMin), vec2(uMax, vMax))).a;
-                    haloAlpha *= 0.25 * uStampGlowStrength * 0.65;
-                }
-
-                float totalAlpha = clamp(coreAlpha + haloAlpha, 0.0, 1.0);
-                color = mix(color, uStampColor, totalAlpha * 0.92) + uStampColor * haloAlpha * 0.35;
-            }
-        }
+    // 4. Date Stamp
+    if (drawStamp) {
+        color = renderStampOverlay(color, photoUv, uTargetAspect);
     }
 
     return clamp(color, 0.0, 1.0);
+}
+
+vec3 applyDvTimecodeBars(vec3 color, vec2 uv) {
+    vec2 scanUv = vec2(uv.x, 1.0 - uv.y);
+    vec4 scanSample = texture(uDvScanlineTex, scanUv);
+    color = mix(color, color * (1.0 - scanSample.a * 0.25) + scanSample.rgb * scanSample.a * 0.22, 0.85);
+
+    // Top and bottom dark camcorder HUD bars
+    float inTopBar = step(0.915, uv.y);
+    float inBottomBar = step(uv.y, 0.085);
+    float barMask = clamp(inTopBar + inBottomBar, 0.0, 1.0);
+    color = mix(color, color * 0.35 + vec3(0.03, 0.04, 0.05), barMask * 0.82);
+
+    // Subtle red REC dot in top-left bar
+    vec2 recPos = (uv - vec2(0.065, 0.957)) * vec2(uTargetAspect, 1.0);
+    float recDot = 1.0 - smoothstep(0.011, 0.015, length(recPos));
+    color = mix(color, vec3(0.92, 0.16, 0.14), recDot);
+    return color;
 }
 
 void main() {
@@ -396,7 +696,7 @@ void main() {
     }
 
     vec3 finalColor;
-    if (uHasFrame > 0.5) {
+    if (uHasFrame == 1) {
         vec2 frameTexUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
         vec4 frameSample = texture(uFrameTex, frameTexUv);
         vec2 winSize = max(uFrameWindow.zw - uFrameWindow.xy, vec2(0.001));
@@ -406,11 +706,32 @@ void main() {
         );
         vec3 photoColor = vec3(0.0);
         if (photoUv.x >= 0.0 && photoUv.x <= 1.0 && photoUv.y >= 0.0 && photoUv.y <= 1.0) {
-            photoColor = applyEffects(photoUv);
+            photoColor = applyEffects(photoUv, true);
         }
         finalColor = mix(photoColor, frameSample.rgb, frameSample.a);
+    } else if (uHasFrame == 2) {
+        finalColor = applyEffects(vTexCoord, true);
+        finalColor = applyDvTimecodeBars(finalColor, vTexCoord);
+    } else if (uHasFrame == 3) {
+        vec2 frameTexUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
+        vec4 frameSample = texture(uFrameTex, frameTexUv);
+        vec3 photoColor = vec3(0.0);
+        for (int i = 0; i < 4; i++) {
+            vec4 panel = uPhotoPanels[i];
+            if (frameTexUv.x >= panel.x && frameTexUv.x <= panel.z &&
+                frameTexUv.y >= panel.y && frameTexUv.y <= panel.w) {
+                vec2 pSize = max(panel.zw - panel.xy, vec2(0.001));
+                vec2 panelUv = vec2(
+                    (frameTexUv.x - panel.x) / pSize.x,
+                    1.0 - (frameTexUv.y - panel.y) / pSize.y
+                );
+                photoColor = applyEffects(panelUv, false);
+            }
+        }
+        finalColor = mix(photoColor, frameSample.rgb, frameSample.a);
+        finalColor = renderStampOverlay(finalColor, vTexCoord, uTargetAspect);
     } else {
-        finalColor = applyEffects(vTexCoord);
+        finalColor = applyEffects(vTexCoord, true);
     }
 
     if (uSplitCompareRatio > 0.001 && uSplitCompareRatio < 0.999) {
@@ -423,6 +744,39 @@ void main() {
     }
 
     fragColor = vec4(clamp(finalColor, 0.0, 1.0), 1.0);
+}
+"""
+
+    const val PASS_OVERLAY_FRAME_FRAGMENT_SHADER = """#version 300 es
+precision highp float;
+
+in vec2 vTexCoord;
+out vec4 fragColor;
+
+uniform sampler2D uBaseTex;
+uniform sampler2D uFrameTex;
+uniform sampler2D uStampAtlasTex;
+uniform float uTargetAspect;
+
+uniform float uStampEnabled;
+uniform int uStampLength;
+uniform int uStampIndices[24];
+uniform vec3 uStampColor;
+uniform float uStampGlowStrength;
+uniform int uStampPosition;
+uniform float uStampCleanSans;
+uniform vec2 uAtlasGrid;
+uniform vec2 uAtlasSize;
+uniform vec2 uCellSize;
+uniform float uGlyphPadding;
+""" + STAMP_HELPER_GLSL + """
+void main() {
+    vec3 baseColor = texture(uBaseTex, vTexCoord).rgb;
+    vec2 frameTexUv = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
+    vec4 frameSample = texture(uFrameTex, frameTexUv);
+    vec3 composited = mix(baseColor, frameSample.rgb, frameSample.a);
+    composited = renderStampOverlay(composited, vTexCoord, uTargetAspect);
+    fragColor = vec4(clamp(composited, 0.0, 1.0), 1.0);
 }
 """
 }

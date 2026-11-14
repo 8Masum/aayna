@@ -17,7 +17,7 @@ class ExportMetadataFormatterTest {
 
     @Test
     fun `formatFileName produces clean JPEG name with and without suffix`() {
-        val profile = CameraCatalog.dc04SilverPulse
+        val profile = CameraCatalog.z30
         val recipe =
             CaptureRecipe(
                 recipeId = "rec-1",
@@ -32,7 +32,7 @@ class ExportMetadataFormatterTest {
                 recipe = recipe,
                 zoneId = ZoneOffset.UTC
             )
-        assertEquals("AAYNA_DC04_20240615_143045_007.jpg", standard)
+        assertEquals("AAYNA_Z30_20240615_143045_007.jpg", standard)
 
         val cleanDualSave =
             ExportMetadataFormatter.formatFileName(
@@ -41,6 +41,35 @@ class ExportMetadataFormatterTest {
                 suffix = "clean",
                 zoneId = ZoneOffset.UTC
             )
-        assertEquals("AAYNA_DC04_20240615_143045_007_clean.jpg", cleanDualSave)
+        assertEquals("AAYNA_Z30_20240615_143045_007_clean.jpg", cleanDualSave)
+
+        val d3dGif =
+            ExportMetadataFormatter.formatFileName(
+                profile = profile,
+                recipe = recipe,
+                suffix = "d3d",
+                zoneId = ZoneOffset.UTC,
+                extension = "gif"
+            )
+        assertEquals("AAYNA_Z30_20240615_143045_007_d3d.gif", d3dGif)
+    }
+
+    @Test
+    fun `formatVideoFileName and formatMakerNote produce clean-room identifiers`() {
+        val profile = CameraCatalog.z30
+        val recipe =
+            CaptureRecipe(
+                recipeId = "rec-2",
+                cameraId = profile.id,
+                capturedAtEpochMs = 1_718_461_845_007L,
+                randomSeed = 99L,
+                skinId = "skin_charcoal_metal"
+            )
+
+        val videoName = ExportMetadataFormatter.formatVideoFileName(profile, recipe.capturedAtEpochMs, ZoneOffset.UTC)
+        assertEquals("AAYNA_Z30_20240615_143045_007.mp4", videoName)
+
+        val makerNote = ExportMetadataFormatter.formatMakerNote(profile, recipe)
+        assertEquals("AAYNA;cam=${profile.id};media=STILL;skin=skin_charcoal_metal", makerNote)
     }
 }

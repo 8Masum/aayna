@@ -14,5 +14,6 @@ data class GlRenderParams(
     val isPreviewHoldOriginal: Boolean = false,
     val splitCompareRatio: Float = 0f,
     val randomSeed: Long = 1L,
-    val inputAspectRatio: Float = 4f / 3f
+    val inputAspectRatio: Float = 4f / 3f,
+    val skipStamp: Boolean = false
 )

@@ -4,11 +4,13 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicBoolean
 
 class AaynaSoundEngine(context: Context) {
     private val appContext = context.applicationContext
     private val loadedSamples = ConcurrentHashMap.newKeySet<Int>()
     private val soundIds = ConcurrentHashMap<String, Int>()
+    private val isReleased = AtomicBoolean(false)
 
     private val soundPool: SoundPool =
         SoundPool
@@ -23,7 +25,7 @@ class AaynaSoundEngine(context: Context) {
             ).build()
             .apply {
                 setOnLoadCompleteListener { _, sampleId, status ->
-                    if (status == 0) {
+                    if (status == 0 && !isReleased.get()) {
                         loadedSamples.add(sampleId)
                     }
                 }
@@ -38,39 +40,53 @@ class AaynaSoundEngine(context: Context) {
         loadSample(SOUND_DIAL_TICK, R.raw.dial_tick)
     }
 
+    fun isSampleReady(key: String): Boolean {
+        val sampleId = soundIds[key] ?: return false
+        return loadedSamples.contains(sampleId)
+    }
+
     fun playShutter(soundAssetName: String, sfxEnabled: Boolean) {
-        if (!sfxEnabled) return
+        if (!sfxEnabled || isReleased.get()) return
         val key = if (soundIds.containsKey(soundAssetName)) soundAssetName else SOUND_SHUTTER_CCD
-        playSample(key, volume = 1.0f)
+        playSample(key, volume = 1.0f, rate = 1.0f)
     }
 
     fun playFilmWind(sfxEnabled: Boolean) {
-        if (!sfxEnabled) return
-        playSample(SOUND_FILM_WIND, volume = 0.9f)
+        if (!sfxEnabled || isReleased.get()) return
+        playSample(SOUND_FILM_WIND, volume = 0.9f, rate = 1.0f)
     }
 
     fun playDialTick(sfxEnabled: Boolean) {
-        if (!sfxEnabled) return
-        playSample(SOUND_DIAL_TICK, volume = 0.65f)
+        if (!sfxEnabled || isReleased.get()) return
+        playSample(SOUND_DIAL_TICK, volume = 0.65f, rate = 1.0f)
+    }
+
+    fun playVideoStartStop(sfxEnabled: Boolean, isStarting: Boolean = true) {
+        if (!sfxEnabled || isReleased.get()) return
+        val rate = if (isStarting) 1.18f else 0.85f
+        playSample(SOUND_DIAL_TICK, volume = 0.8f, rate = rate)
     }
 
     fun release() {
+        if (!isReleased.compareAndSet(false, true)) return
         loadedSamples.clear()
         soundIds.clear()
-        soundPool.release()
+        runCatching { soundPool.release() }
     }
 
     private fun loadSample(key: String, rawResId: Int) {
-        val sampleId = soundPool.load(appContext, rawResId, 1)
+        if (isReleased.get()) return
+        val sampleId = runCatching { soundPool.load(appContext, rawResId, 1) }.getOrDefault(0)
         if (sampleId > 0) {
             soundIds[key] = sampleId
         }
     }
 
-    private fun playSample(key: String, volume: Float) {
+    private fun playSample(key: String, volume: Float, rate: Float) {
+        if (isReleased.get()) return
         val sampleId = soundIds[key] ?: return
         if (loadedSamples.contains(sampleId)) {
-            soundPool.play(sampleId, volume, volume, 1, 0, 1.0f)
+            runCatching { soundPool.play(sampleId, volume, volume, 1, 0, rate) }
         }
     }
 

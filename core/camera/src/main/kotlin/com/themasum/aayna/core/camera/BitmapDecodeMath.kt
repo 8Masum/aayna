@@ -34,9 +34,15 @@ object BitmapDecodeMath {
 
     /**
      * Computes clockwise rotation degrees and horizontal mirror flag from an EXIF orientation
-     * tag and whether the frame originated from a front-facing camera.
+     * tag, whether the frame originated from a front-facing camera, user front-mirror preference,
+     * and OEM [swapFrontMirror] hardware quirk.
      */
-    fun computeExifTransform(exifOrientation: Int, isFrontCamera: Boolean): ExifTransform {
+    fun computeExifTransform(
+        exifOrientation: Int,
+        isFrontCamera: Boolean,
+        mirrorFrontCamera: Boolean = true,
+        swapFrontMirror: Boolean = false
+    ): ExifTransform {
         val (rotation, baseMirror) =
             when (exifOrientation) {
                 EXIF_ORIENTATION_FLIP_HORIZONTAL -> 0 to true
@@ -48,7 +54,13 @@ object BitmapDecodeMath {
                 EXIF_ORIENTATION_ROTATE_270 -> 270 to false
                 else -> 0 to false
             }
-        val mirrorHorizontal = if (isFrontCamera) !baseMirror else baseMirror
+        val applyFrontMirror =
+            if (isFrontCamera) {
+                if (swapFrontMirror) !mirrorFrontCamera else mirrorFrontCamera
+            } else {
+                false
+            }
+        val mirrorHorizontal = if (applyFrontMirror) !baseMirror else baseMirror
         return ExifTransform(
             rotationDegrees = rotation,
             mirrorHorizontal = mirrorHorizontal
