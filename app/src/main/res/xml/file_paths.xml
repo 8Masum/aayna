@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <external-path
+        name="aayna_pictures"
+        path="Pictures/Aayna" />
+    <external-path
+        name="aayna_movies"
+        path="Movies/Aayna" />
+    <external-path
+        name="aayna_external_root"
+        path="." />
+    <files-path
+        name="aayna_files"
+        path="." />
+    <cache-path
+        name="aayna_cache"
+        path="." />
+</paths>

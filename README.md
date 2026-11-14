@@ -1,4 +1,4 @@
-# Aayna v2.0.0
+# Aayna v2.5.0
 
 **Aayna** is an offline-first, tactile retro & CCD camera Android application built with Kotlin, Jetpack Compose, CameraX, and a persistent 4-pass OpenGL ES 3.0 optical shader pipeline.
 
@@ -22,6 +22,9 @@
   - Room v2 negative database (`MIGRATION_1_2`) with soft-delete Trash/Restore, `ThumbnailMemoryCache`, split-swipe compare, hold-for-clean-negative preview, EXIF viewer, and batch JPEG/GIF export.
 - **Device Quirk Registry & Diagnostics**:
   - Pure-Kotlin `DeviceQuirkRegistry` adapting preview mode, front-camera mirroring, EV clamping, and manual AE fallback per SoC/OEM HAL, inspectable alongside live Camera2 capabilities and GL shader pass statuses in Settings → Diagnostics.
+- **v2.5.0 Integration & Hardening**:
+  - `FileProvider` (`${applicationId}.fileprovider`) configured for pre-Q (API 26–28) shareable photo/video URIs across `Pictures/Aayna`, `Movies/Aayna`, app files, and cache.
+  - Persistent `AaynaPersistentGlEngine` wired directly into `GalleryStudioRoute`, with `compileDebugAndroidTestKotlin` enforced in CI alongside `ktlintCheck`, `testDebugUnitTest`, and `lintDebug`.
 
 ## Module Architecture
 

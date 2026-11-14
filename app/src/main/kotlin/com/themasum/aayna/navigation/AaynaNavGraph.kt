@@ -97,7 +97,8 @@ fun AaynaNavGraph(
                 dotMatrixFontFamily = AaynaFonts.DotMatrix,
                 vcrOsdFontFamily = AaynaFonts.VcrOsd,
                 pixelFontFamily = AaynaFonts.PixelLcd,
-                condensedFontFamily = AaynaFonts.HardwareCondensed
+                condensedFontFamily = AaynaFonts.HardwareCondensed,
+                persistentGlEngine = container.persistentGlEngine
             )
         }
 

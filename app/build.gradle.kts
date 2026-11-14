@@ -16,9 +16,13 @@ val hasReleaseSigning =
         releaseKeyPassword != null
 
 val ciVersionCode: Int =
-    project.findProperty("aayna.versionCode")?.toString()?.toIntOrNull() ?: 2
+    project.findProperty("aayna.versionCode")?.toString()?.toIntOrNull()
+        ?: System.getenv("AAYNA_VERSION_CODE")?.toIntOrNull()
+        ?: 2050000
 val ciVersionName: String =
-    project.findProperty("aayna.versionName")?.toString()?.takeIf { it.isNotBlank() } ?: "2.0.0"
+    project.findProperty("aayna.versionName")?.toString()?.takeIf { it.isNotBlank() }
+        ?: System.getenv("AAYNA_VERSION_NAME")?.takeIf { it.isNotBlank() }
+        ?: "2.5.0"
 
 android {
     namespace = "com.themasum.aayna"

@@ -9,7 +9,7 @@ on:
         type: boolean
         default: true
       tag_name:
-        description: 'Release tag name (e.g. v1.0.1). Defaults to v1.0.0 if empty.'
+        description: 'Release tag name (e.g. v2.5.0). Defaults to v2.5.0 if empty.'
         required: false
         type: string
         default: ''
@@ -50,7 +50,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run ktlint, unit tests, and Android lint
-        run: ./gradlew ktlintCheck testDebugUnitTest lintDebug --no-daemon
+        run: ./gradlew ktlintCheck testDebugUnitTest lintDebug compileDebugAndroidTestKotlin --no-daemon
 
       - name: Decode and verify release keystore
         if: github.event_name != 'pull_request'
@@ -80,7 +80,7 @@ jobs:
           elif [ -n "${{ inputs.tag_name }}" ]; then
             RAW_TAG="${{ inputs.tag_name }}"
           else
-            RAW_TAG="v1.0.0"
+            RAW_TAG="v2.5.0"
           fi
 
           if [[ "$RAW_TAG" != v* ]]; then
