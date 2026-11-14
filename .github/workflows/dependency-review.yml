@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  actions: read
+  checks: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,10 +18,64 @@ jobs:
   dependency-review:
     name: Dependency Review
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Wait for Gradle dependency snapshot before querying review API
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+
+          # Wait for "Generate Gradle Dependency Graph" to finish before touching
+          # /dependency-graph/compare?per_page=5, avoiding negative-cache poisoning.
+          for i in $(seq 1 60); do
+            STATUS=$(gh api "repos/${REPO}/commits/${HEAD_SHA}/check-runs" \
+              --jq '.check_runs[] | select(.name == "Generate Gradle Dependency Graph") | .status + ":" + (.conclusion // "")' \
+              2>/dev/null | head -n 1 || true)
+            if [ -n "$STATUS" ]; then
+              echo "Generate Gradle Dependency Graph status: $STATUS"
+              case "$STATUS" in
+                completed:success)
+                  break
+                  ;;
+                completed:*)
+                  echo "::error::Generate Gradle Dependency Graph did not succeed ($STATUS)."
+                  exit 1
+                  ;;
+              esac
+            else
+              echo "Waiting for Generate Gradle Dependency Graph check-run ($i/60)..."
+            fi
+            sleep 10
+          done
+
+          # Allow workflow_run (Dependency Graph (Submit)) to download & POST the snapshot.
+          sleep 15
+
+          # Poll /dependency-graph/compare with distinct per_page (>= 10) so per_page=5
+          # used by dependency-review-action is never queried before indexing completes.
+          for PAGE in $(seq 10 45); do
+            HEADERS=$(curl -sS -D - -o /dev/null \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/${REPO}/dependency-graph/compare/${BASE_SHA}...${HEAD_SHA}?per_page=${PAGE}" || true)
+            HTTP_CODE=$(printf '%s\n' "$HEADERS" | tr -d '\r' | awk '/^HTTP\//{code=$2} END{print code}')
+            WARN_B64=$(printf '%s\n' "$HEADERS" | tr -d '\r' | awk -F': ' 'tolower($1)=="x-github-dependency-graph-snapshot-warnings"{print $2}' | head -n 1)
+            if [ "${HTTP_CODE:-}" = "200" ] && [ -z "${WARN_B64}" ]; then
+              echo "Dependency graph snapshots indexed cleanly (verified via per_page=${PAGE})."
+              break
+            fi
+            WARN_MSG=$(printf '%s' "$WARN_B64" | base64 --decode 2>/dev/null || echo "$WARN_B64")
+            echo "Waiting for snapshot indexing (http=${HTTP_CODE:-none}, per_page=${PAGE}): ${WARN_MSG:-pending}"
+            sleep 10
+          done
 
       - name: Run dependency review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
@@ -28,4 +84,4 @@ jobs:
           license-check: true
           deny-licenses: GPL-3.0, AGPL-3.0
           retry-on-snapshot-warnings: true
-          retry-on-snapshot-warnings-timeout: 360
+          retry-on-snapshot-warnings-timeout: 180
