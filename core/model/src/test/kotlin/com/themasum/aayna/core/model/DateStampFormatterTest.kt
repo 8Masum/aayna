@@ -81,4 +81,11 @@ class DateStampFormatterTest {
             )
         )
     }
+
+    @Test
+    fun `formatTimecode formats camcorder durations cleanly`() {
+        assertEquals("00:00:00", DateStampFormatter.formatTimecode(-500L))
+        assertEquals("00:01:05", DateStampFormatter.formatTimecode(65_000L))
+        assertEquals("01:02:03", DateStampFormatter.formatTimecode(3_723_400L))
+    }
 }

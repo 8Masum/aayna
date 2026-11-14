@@ -33,7 +33,8 @@ data class AaynaDiagnosticsReport(
     val activeCameraProfileId: String,
     val cameraCapability: CameraCapabilityInfo,
     val glInfo: GlDiagnosticsInfo,
-    val shaderStatuses: List<PassShaderStatus> = emptyList()
+    val shaderStatuses: List<PassShaderStatus> = emptyList(),
+    val deviceQuirks: ResolvedDeviceQuirks? = null
 ) {
     fun toShareableText(): String = buildString {
         appendLine("=== Project Aayna Diagnostics ===")
@@ -67,6 +68,18 @@ data class AaynaDiagnosticsReport(
                 if (!status.compiled && status.errorLog.isNotBlank()) {
                     appendLine("  Error: ${status.errorLog}")
                 }
+            }
+        }
+        deviceQuirks?.let { quirks ->
+            appendLine()
+            appendLine("[Device Quirks]")
+            appendLine("Matched Rules: ${quirks.matchedRuleIds.ifEmpty { listOf("none") }.joinToString(", ")}")
+            appendLine("Force Compat Preview: ${quirks.flags.forceCompatPreview}")
+            appendLine("Swap Front Mirror: ${quirks.flags.swapFrontMirror}")
+            appendLine("Clamp AE Range: ${quirks.flags.clampAeRange}")
+            appendLine("Disable Manual AE: ${quirks.flags.disableManualAe}")
+            if (quirks.flags.notes.isNotBlank()) {
+                appendLine("Notes: ${quirks.flags.notes}")
             }
         }
     }

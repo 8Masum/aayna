@@ -8,7 +8,7 @@ data class ShutterPreset(val label: String, val exposureTimeNs: Long?)
 data class ShaderExposureFallback(val evGainStops: Float, val shaderNoiseBoost: Float, val digitalBoostStops: Float)
 
 object ExposureMath {
-    val STANDARD_ISO_STEPS: List<Int?> = listOf(null, 100, 200, 400, 800, 1600)
+    val STANDARD_ISO_STEPS: List<Int?> = listOf(null, 50, 100, 200, 400, 800, 1600)
 
     val STANDARD_SHUTTER_PRESETS: List<ShutterPreset> =
         listOf(
@@ -26,6 +26,13 @@ object ExposureMath {
 
     private const val REFERENCE_ISO = 100.0
     private const val REFERENCE_SHUTTER_NS = 16_666_667.0 // 1/60s baseline
+
+    /**
+     * Returns true only when the sensor supports manual exposure and both ISO and shutter
+     * speed are explicitly supplied, allowing Camera2 `CONTROL_AE_MODE_OFF` without AE stalls.
+     */
+    fun isFullManualExposure(hasManualSensor: Boolean, iso: Int?, shutterNs: Long?): Boolean =
+        hasManualSensor && iso != null && shutterNs != null
 
     fun clampIso(requestedIso: Int?, minIso: Int, maxIso: Int): Int? {
         if (requestedIso == null) return null
@@ -51,15 +58,25 @@ object ExposureMath {
         return rawIndex.coerceIn(low, high)
     }
 
+    /**
+     * Computes shader-side EV/ISO/shutter fallback stops.
+     *
+     * Full manual exposure (`hasManualSensor && iso != null && shutterNs != null`) relies on the
+     * hardware sensor for brightness and only applies shader grain boost at elevated ISO.
+     * When AE is active or only one of ISO/shutter is specified (partial manual), Camera2 falls
+     * back to AE/EV, so negative/positive ISO stops (including ISO 50 < ISO 100), shutter stops,
+     * and software EV fallback (unless [hardwareEvApplied] is true) are applied cleanly.
+     */
     fun computeShaderFallbackGains(
         hasManualSensor: Boolean,
         ev: Float,
         iso: Int?,
-        shutterNs: Long?
+        shutterNs: Long?,
+        hardwareEvApplied: Boolean = false
     ): ShaderExposureFallback {
         val isoStops =
             if (iso != null && iso > 0) {
-                (ln(iso.toDouble() / REFERENCE_ISO) / ln(2.0)).toFloat().coerceAtLeast(0f)
+                (ln(iso.toDouble() / REFERENCE_ISO) / ln(2.0)).toFloat().coerceIn(-3.0f, 5.0f)
             } else {
                 0f
             }
@@ -71,7 +88,7 @@ object ExposureMath {
                 else -> (isoStops * 0.28f).coerceIn(0f, 1.4f)
             }
 
-        if (hasManualSensor) {
+        if (isFullManualExposure(hasManualSensor, iso, shutterNs)) {
             return ShaderExposureFallback(
                 evGainStops = 0f,
                 shaderNoiseBoost = noiseBoost,
@@ -87,8 +104,9 @@ object ExposureMath {
             }
 
         val digitalBoost = (isoStops * 0.35f + shutterStops * 0.25f).coerceIn(-2.0f, 2.5f)
+        val evFallback = if (hardwareEvApplied) 0f else ev.coerceIn(-2.0f, 2.0f)
         return ShaderExposureFallback(
-            evGainStops = ev.coerceIn(-2.0f, 2.0f),
+            evGainStops = evFallback,
             shaderNoiseBoost = noiseBoost,
             digitalBoostStops = digitalBoost
         )
