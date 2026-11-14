@@ -1,0 +1,65 @@
+name: Device / Camera Quirk Report
+description: Report OEM, SoC, or Camera2 HAL compatibility issues (stretched preview, mirrored front camera, broken AE/EV, GL shader errors)
+title: "[Quirk]: "
+labels:
+  - device-quirk
+  - camera
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Aayna uses `DeviceQuirkRegistry` to adapt Camera2 HAL and OpenGL preview behavior per manufacturer, model, SoC, and Android SDK. Sharing your **Settings → Diagnostics** report makes adding a targeted quirk rule fast and accurate.
+  - type: input
+    id: device_model
+    attributes:
+      label: Manufacturer & Model
+      placeholder: e.g. Samsung Galaxy A54 (SM-A546E)
+    validations:
+      required: true
+  - type: input
+    id: soc_hardware
+    attributes:
+      label: SoC / Hardware (ro.hardware)
+      placeholder: e.g. Exynos 1380 / MediaTek Dimensity / Snapdragon
+    validations:
+      required: false
+  - type: input
+    id: android_version
+    attributes:
+      label: Android Version & API Level
+      placeholder: e.g. Android 14 (API 34)
+    validations:
+      required: true
+  - type: input
+    id: app_version
+    attributes:
+      label: Aayna Version
+      placeholder: v2.5.0
+    validations:
+      required: true
+  - type: checkboxes
+    id: symptoms
+    attributes:
+      label: Observed Hardware / HAL Symptoms
+      options:
+        - label: Viewfinder preview looks stretched, distorted, or black (`forceCompatPreview`)
+        - label: Front camera preview or saved capture is mirrored incorrectly (`swapFrontMirror`)
+        - label: Exposure compensation (EV) clips, flashes, or freezes (`clampAeRange` / `disableManualAe`)
+        - label: Sharpening / noise-reduction artifacts in Camera2 stream
+        - label: OpenGL shader compilation or FBO failure in Diagnostics
+        - label: Video recording (`DCR`) or D3D MP4 encoder failure
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics JSON Report (from Settings → Diagnostics)
+      description: Open Settings → Diagnostics → Copy Report and paste it below.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional Notes
+      description: Any extra details, camera profiles affected, or screenshots.
+    validations:
+      required: false

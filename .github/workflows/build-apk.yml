@@ -9,29 +9,39 @@ on:
         type: boolean
         default: true
       tag_name:
-        description: 'Release tag name (e.g. v2.5.0). Defaults to v2.5.0 if empty.'
+        description: 'Release tag name (e.g. v2.5.0). Defaults to app version if empty.'
         required: false
         type: string
         default: ''
   push:
-    branches: [ main, master ]
+    branches:
+      - main
     tags:
       - 'v*'
   pull_request:
-    branches: [ main, master ]
+    branches:
+      - main
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build:
+  verify:
+    name: Verify (ktlint, Tests, Lint, Debug APK)
     runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Java JDK 21
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'temurin'
           java-version: '21'
@@ -42,18 +52,70 @@ jobs:
           packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.3.1'
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      - name: Run ktlint, unit tests, and Android lint
-        run: ./gradlew ktlintCheck testDebugUnitTest lintDebug compileDebugAndroidTestKotlin --no-daemon
+      - name: Run ktlint, unit tests, Android lint, and debug build
+        run: ./gradlew ktlintCheck testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug --no-daemon
+
+      - name: Verify offline privacy contract (merged debug manifest)
+        run: |
+          MANIFEST="app/build/intermediates/merged_manifest/debug/processDebugMainManifest/AndroidManifest.xml"
+          test -f "$MANIFEST"
+          if grep -q 'android\.permission\.INTERNET' "$MANIFEST"; then
+            echo "::error::Offline privacy violation: android.permission.INTERNET found in merged debug manifest!"
+            exit 1
+          fi
+          echo "Offline privacy check passed: android.permission.INTERNET is absent from debug manifest."
+
+      - name: Upload verification reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: verification-reports
+          path: |
+            **/build/reports/tests/**
+            **/build/reports/lint-results*
+            **/build/reports/ktlint/**
+          if-no-files-found: ignore
+          retention-days: 7
+
+  release:
+    name: Build Signed Release APK
+    needs: verify
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Java JDK 21
+        uses: actions/setup-java@v6
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-37.0 build-tools;37.0.0'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.3.1'
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
 
       - name: Decode and verify release keystore
-        if: github.event_name != 'pull_request'
         env:
           AAYNA_KEYSTORE_BASE64: ${{ secrets.AAYNA_KEYSTORE_BASE64 }}
           AAYNA_KEYSTORE_PASSWORD: ${{ secrets.AAYNA_KEYSTORE_PASSWORD }}
@@ -80,7 +142,8 @@ jobs:
           elif [ -n "${{ inputs.tag_name }}" ]; then
             RAW_TAG="${{ inputs.tag_name }}"
           else
-            RAW_TAG="v2.5.0"
+            DEFAULT_VER=$(grep -A3 'val ciVersionName' app/build.gradle.kts | sed -n 's/.*?: "\([0-9][^"]*\)".*/\1/p' | head -n 1)
+            RAW_TAG="v${DEFAULT_VER:-2.5.0}"
           fi
 
           if [[ "$RAW_TAG" != v* ]]; then
@@ -104,7 +167,6 @@ jobs:
           echo "Computed versionName=$VERSION_NAME, versionCode=$VERSION_CODE (tag=$RELEASE_TAG)"
 
       - name: Build Signed Release APK
-        if: github.event_name != 'pull_request'
         env:
           AAYNA_KEYSTORE_PASSWORD: ${{ secrets.AAYNA_KEYSTORE_PASSWORD }}
           AAYNA_KEY_ALIAS: ${{ secrets.AAYNA_KEY_ALIAS }}
@@ -115,8 +177,17 @@ jobs:
             -Paayna.versionName="${{ env.VERSION_NAME }}" \
             --no-daemon
 
+      - name: Verify offline privacy contract (merged release manifest)
+        run: |
+          MANIFEST="app/build/intermediates/merged_manifest/release/processReleaseMainManifest/AndroidManifest.xml"
+          test -f "$MANIFEST"
+          if grep -q 'android\.permission\.INTERNET' "$MANIFEST"; then
+            echo "::error::Offline privacy violation: android.permission.INTERNET found in merged release manifest!"
+            exit 1
+          fi
+          echo "Offline privacy check passed: android.permission.INTERNET is absent from release manifest."
+
       - name: Verify APK signature and prepare release assets
-        if: github.event_name != 'pull_request'
         run: |
           mkdir -p release-assets
           APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
@@ -142,18 +213,18 @@ jobs:
           cat release-assets/SHA256SUMS.txt
 
       - name: Upload Release APK Artifact
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Aayna-Release-APK
           path: release-assets/*
           if-no-files-found: error
+          retention-days: 14
 
       - name: Publish GitHub Release
         if: >
           startsWith(github.ref, 'refs/tags/v') ||
           (github.event_name == 'workflow_dispatch' && (inputs.publish_release == true || inputs.publish_release == 'true'))
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           name: Aayna ${{ env.RELEASE_TAG }}

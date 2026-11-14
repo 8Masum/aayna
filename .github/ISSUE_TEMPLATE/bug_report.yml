@@ -1,0 +1,75 @@
+name: Bug Report
+description: Report a crash, rendering glitch, audio/video export bug, or UI issue in Aayna
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Aayna! Please include as much detail as possible—especially your device model, Android version, and the JSON export from **Settings → Diagnostics** if available.
+  - type: input
+    id: app_version
+    attributes:
+      label: Aayna Version
+      description: Version shown in Settings or the release tag you installed.
+      placeholder: v2.5.0
+    validations:
+      required: true
+  - type: input
+    id: device_info
+    attributes:
+      label: Device Model & Android Version
+      description: Include manufacturer, model, and Android OS version (e.g., Pixel 8 / Android 15, Redmi Note 12 / Android 13).
+      placeholder: e.g. Pixel 8 / Android 15 (API 35)
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Affected Area
+      options:
+        - ProCCD Viewfinder & Hardware Skins
+        - Camera Capture / CameraX / Focus / Zoom
+        - OpenGL ES 3.0 Shader / LUTs / Date Stamp
+        - Darkroom Studio / Gallery / Undo / Crop
+        - D3D Wigglegram / GIF / MP4 Export
+        - DCR Video Recording / Video Transcoding
+        - Photo Booth 4-Strip
+        - Settings & Diagnostics
+        - App Startup / Permissions / Storage
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What Happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to Reproduce
+      description: Exact steps to trigger the issue.
+      value: |
+        1. Open Aayna and select camera '...'
+        2. Tap '...'
+        3. Observe '...'
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs Actual Behavior
+      description: What did you expect to happen, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics Report (Settings → Diagnostics)
+      description: Optional but very helpful—paste the copied Diagnostics JSON report here.
+      render: json
+    validations:
+      required: false

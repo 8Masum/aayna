@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a Security Vulnerability
+    url: https://github.com/8Masum/aayna/security/advisories/new
+    about: Privately report security issues or privacy regressions instead of opening a public issue.
+  - name: Download Latest Release APK
+    url: https://github.com/8Masum/aayna/releases/latest
+    about: Grab the latest signed Aayna APK and SHA256SUMS.txt before reporting an already-fixed bug.

@@ -1,0 +1,45 @@
+name: Feature or Camera Profile Request
+description: Propose a new offline capability, camera profile, hardware skin, or Darkroom Studio improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Aayna is strictly **100% offline and private** (`INTERNET` permission is never used). Please keep proposals compatible with on-device processing.
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Camera Profile / Film Stock
+        - ProCCD Hardware Chassis / Skin
+        - OpenGL Shader / Lens / Frame / Stamp
+        - Darkroom Studio / Editing Tool
+        - D3D Wigglegram / Photo Booth / Video Mode
+        - Accessibility / Haptics / Audio
+        - Developer Tooling / Build / Docs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Motivation / Use Case
+      description: What photography workflow or tactile detail would this improve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Design
+      description: Describe the expected UX, controls, or optical behavior.
+    validations:
+      required: true
+  - type: checkboxes
+    id: offline_check
+    attributes:
+      label: Offline & Clean-Room Alignment
+      options:
+        - label: This feature can work 100% offline on-device without network access or third-party cloud APIs
+          required: true
