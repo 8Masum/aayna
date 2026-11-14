@@ -28,6 +28,7 @@ Fixes #
 ## Verification Checklist
 
 - [ ] `./gradlew ktlintCheck` passes with zero errors
+- [ ] `./gradlew :core:model:test` passes
 - [ ] `./gradlew testDebugUnitTest` passes
 - [ ] `./gradlew lintDebug` passes
 - [ ] `./gradlew compileDebugAndroidTestKotlin` passes

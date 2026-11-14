@@ -51,9 +51,9 @@ body:
   - type: textarea
     id: diagnostics
     attributes:
-      label: Diagnostics JSON Report (from Settings → Diagnostics)
-      description: Open Settings → Diagnostics → Copy Report and paste it below.
-      render: json
+      label: Diagnostics Report (from Settings → Diagnostics)
+      description: Open Settings → ON-DEVICE CAMERA2, QUIRKS & GL DIAGNOSTICS → COPY REPORT and paste the plain-text report below.
+      render: text
     validations:
       required: true
   - type: textarea

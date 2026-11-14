@@ -6,7 +6,7 @@
 
 **Offline-first, tactile retro & CCD camera for Android**
 
-[![Build and Release Android APK](https://github.com/8Masum/aayna/actions/workflows/build-apk.yml/badge.svg)](https://github.com/8Masum/aayna/actions/workflows/build-apk.yml)
+[![Build and Release Android APK](https://github.com/8Masum/aayna/actions/workflows/build-apk.yml/badge.svg?branch=main)](https://github.com/8Masum/aayna/actions/workflows/build-apk.yml)
 [![Latest Release](https://img.shields.io/github/v/release/8Masum/aayna?label=release)](https://github.com/8Masum/aayna/releases/latest)
 [![License: MIT](https://img.shields.io/github/license/8Masum/aayna)](LICENSE)
 [![Android Min SDK](https://img.shields.io/badge/Android-API%2026%2B-3DDC84?logo=android&logoColor=white)](app/build.gradle.kts)
@@ -40,7 +40,7 @@ sha256sum -c SHA256SUMS.txt
   - Tactile horizontal notched ruler dials with mechanical haptics and bundled audio SFX.
 - **Persistent OpenGL ES 3.0 Pipeline (`AaynaPersistentGlEngine`)**:
   - Shared `EGL14` ES 3.0 context with `EGL_RECORDABLE_ANDROID` driving CameraX `SurfaceProcessor` (`Preview` + `VideoCapture`), Photo Studio `TextureView` window rendering (`StudioGlPreviewRenderer`), and offscreen high-resolution/4-strip export (`OffscreenGlExporter`).
-  - 4-pass optical rendering: pre-baked 2D PNG / `.cube` 3D LUT grading, Bradford chromatic adaptation WB, 4-stage halation/bloom, temporal film grain, 9 lens attachments, 8 frame borders, and bitmap-atlas date stamps.
+  - 4-pass optical rendering: pre-baked 2D PNG / `.cube` 3D LUT grading, Bradford chromatic adaptation WB, 4-stage halation/bloom, temporal film grain, 9 lens attachment modes (Standard + 8 optical attachments), 8 frame border styles (None + 7 frames), and bitmap-atlas date stamps.
 - **Multi-Mode Capture**:
   - **Still & Analog Roll**: Instant Digicam Save, Non-Destructive Roll / Negatives, and 24/36-exposure Analog Developing Ritual.
   - **D3D Wigglegram Burst**: Multi-frame burst capture encoded offline to looping GIF89a (`Pictures/Aayna`) and MP4 (`D3dMp4Encoder`).
@@ -53,7 +53,7 @@ sha256sum -c SHA256SUMS.txt
   - Pure-Kotlin `DeviceQuirkRegistry` adapting preview mode, front-camera mirroring, EV clamping, and manual AE fallback per SoC/OEM HAL, inspectable alongside live Camera2 capabilities and GL shader pass statuses in **Settings → Diagnostics**.
 - **v2.5.0 Integration & Hardening**:
   - `FileProvider` (`${applicationId}.fileprovider`) configured for pre-Q (API 26–28) shareable photo/video URIs across `Pictures/Aayna`, `Movies/Aayna`, app files, and cache.
-  - Persistent `AaynaPersistentGlEngine` wired directly into `GalleryStudioRoute`, with `compileDebugAndroidTestKotlin` and manifest offline checks enforced in CI alongside `ktlintCheck`, `testDebugUnitTest`, and `lintDebug`.
+  - Persistent `AaynaPersistentGlEngine` wired directly into `GalleryStudioRoute`, with `:core:model:test`, `compileDebugAndroidTestKotlin`, and manifest offline checks enforced in CI alongside `ktlintCheck`, `testDebugUnitTest`, and `lintDebug`.
 
 ## Module Architecture
 
@@ -115,7 +115,7 @@ sha256sum -c SHA256SUMS.txt
 ### Local CI Checks & APK Build
 
 ```bash
-./gradlew ktlintCheck testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug --no-daemon
+./gradlew ktlintCheck :core:model:test testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug --no-daemon
 ```
 
 To build a signed release APK locally, provide the signing environment variables before running `assembleRelease` (without these variables, `release` falls back to the debug keystore for local verification):
@@ -135,7 +135,7 @@ Aayna intentionally omits `android.permission.INTERNET` and ships zero network o
 ## Contributing & Security
 
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) for code style, commit conventions, and local test commands.
-- Use [Device / Camera Quirk Report](.github/ISSUE_TEMPLATE/device_quirk.yml) with your **Settings → Diagnostics** JSON report to report OEM/SoC camera issues.
+- Use [Device / Camera Quirk Report](.github/ISSUE_TEMPLATE/device_quirk.yml) with your **Settings → Diagnostics** plain-text report to report OEM/SoC camera issues.
 - Report security issues privately via [SECURITY.md](SECURITY.md).
 - Community expectations are defined in [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 - Release history is tracked in [CHANGELOG.md](CHANGELOG.md).

@@ -36,7 +36,7 @@ Set `JAVA_HOME` and `ANDROID_HOME` (or `sdk.dir` in an untracked `local.properti
 Run the full CI verification suite locally before pushing:
 
 ```bash
-./gradlew ktlintCheck testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug --no-daemon
+./gradlew ktlintCheck :core:model:test testDebugUnitTest lintDebug compileDebugAndroidTestKotlin assembleDebug --no-daemon
 ```
 
 Also verify that the merged debug manifest does not include `android.permission.INTERNET`:
@@ -49,7 +49,7 @@ grep -n 'android.permission.INTERNET' app/build/intermediates/merged_manifest/de
 
 If you are fixing or reporting an OEM/SoC Camera2 HAL or OpenGL rendering issue:
 
-1. Open **Settings → Diagnostics** inside Aayna and copy/share the JSON diagnostics report (`AaynaDiagnosticsReport`).
+1. Open **Settings → ON-DEVICE CAMERA2, QUIRKS & GL DIAGNOSTICS** inside Aayna and tap **COPY REPORT** (or share the exported report) to capture the plain-text diagnostics report (`=== Project Aayna Diagnostics ===`).
 2. Add or update rules in `core/model/src/main/kotlin/com/themasum/aayna/core/model/DeviceQuirkRegistry.kt`.
 3. Add deterministic coverage in `core/model/src/test/kotlin/com/themasum/aayna/core/model/DeviceQuirkRegistryTest.kt`.
 

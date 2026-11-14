@@ -7,7 +7,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for helping improve Aayna! Please include as much detail as possible—especially your device model, Android version, and the JSON export from **Settings → Diagnostics** if available.
+        Thanks for helping improve Aayna! Please include as much detail as possible—especially your device model, Android version, and the plain-text diagnostics report from **Settings → Diagnostics** (`COPY REPORT`) if available.
   - type: input
     id: app_version
     attributes:
@@ -69,7 +69,7 @@ body:
     id: diagnostics
     attributes:
       label: Diagnostics Report (Settings → Diagnostics)
-      description: Optional but very helpful—paste the copied Diagnostics JSON report here.
-      render: json
+      description: Optional but very helpful—open Settings → ON-DEVICE CAMERA2, QUIRKS & GL DIAGNOSTICS → COPY REPORT and paste the plain-text report here.
+      render: text
     validations:
       required: false

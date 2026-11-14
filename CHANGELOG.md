@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configured `FileProvider` (`${applicationId}.fileprovider` and `res/xml/file_paths.xml`) for pre-Q (API 26–28) shareable photo/video URIs across `Pictures/Aayna`, `Movies/Aayna`, app files, and cache.
 - Wired persistent `AaynaPersistentGlEngine` directly into `GalleryStudioRoute` (`StudioGlPreviewRenderer`).
 - Added lossless Darkroom Studio edits, undo support, audio recording permission prompt, D3D frame/MP4 export flow (`D3dBurstFrameStore`, `D3dMp4Encoder`), and video editor (`VideoGlTranscoder`).
-- Enforced `compileDebugAndroidTestKotlin` alongside `ktlintCheck`, `testDebugUnitTest`, and `lintDebug` in CI.
+- Enforced `:core:model:test` and `compileDebugAndroidTestKotlin` alongside `ktlintCheck`, `testDebugUnitTest`, and `lintDebug` in CI, plus SHA-pinned workflows and fork-safe Gradle dependency submission.
 
 ### Fixed
 - Hardened CameraX / Camera2 HAL video priority, transform ordering, GL aspect-ratio/unsharp math, and pre-Q MediaStore storage behavior.
