@@ -470,8 +470,8 @@ void main() {
         vec3 nLeft = texture(uFbo1Tex, clamp(vTexCoord - vec2(uTexelSize.x, 0.0), 0.0, 1.0)).rgb;
         vec3 nRight = texture(uFbo1Tex, clamp(vTexCoord + vec2(uTexelSize.x, 0.0), 0.0, 1.0)).rgb;
         vec3 avg4 = 0.25 * (nUp + nDown + nLeft + nRight);
-        vec3 detail = clamp(centerColor - avg4, vec3(-0.25), vec3(0.25));
-        graded = clamp(graded + detail * (uSharpenStrength * 1.15), 0.0, 1.0);
+        float lumaDetail = clamp(dot(centerColor - avg4, vec3(0.2126, 0.7152, 0.0722)), -0.25, 0.25);
+        graded = clamp(graded + vec3(lumaDetail * (uSharpenStrength * 1.15)), 0.0, 1.0);
     }
 
     // Stage 4 halation highlight compose

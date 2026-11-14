@@ -69,6 +69,12 @@ interface NegativeDao {
     )
     suspend fun purgeExpiredTrash(cutoffEpochMs: Long): Int
 
+    @Query("SELECT * FROM negatives WHERE isTrashed = 1")
+    suspend fun getAllTrashed(): List<NegativeEntity>
+
+    @Query("DELETE FROM negatives WHERE isTrashed = 1")
+    suspend fun purgeAllTrashed(): Int
+
     @Query("DELETE FROM negatives WHERE recipeId = :recipeId")
     suspend fun deleteById(recipeId: String)
 }

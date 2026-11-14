@@ -8,7 +8,6 @@ import android.opengl.EGLContext
 import android.opengl.EGLDisplay
 import android.opengl.EGLSurface
 import android.opengl.GLES30
-import android.opengl.Matrix
 import com.themasum.aayna.core.model.CameraProfile
 import com.themasum.aayna.core.model.CaptureRecipe
 import com.themasum.aayna.core.model.FrameBorderStyle
@@ -72,13 +71,6 @@ class OffscreenGlExporter private constructor(
     private var readbackFlippedBuffer: ByteBuffer? = null
     private var readbackRowBytes: ByteArray? = null
     private var readbackCapacityBytes = 0
-
-    private val bitmapTexMatrix =
-        FloatArray(16).apply {
-            Matrix.setIdentityM(this, 0)
-            Matrix.translateM(this, 0, 0f, 1f, 0f)
-            Matrix.scaleM(this, 0, 1f, -1f, 1f)
-        }
 
     suspend fun renderBitmap(
         sourceBitmap: Bitmap,
@@ -145,21 +137,33 @@ class OffscreenGlExporter private constructor(
     ): Bitmap {
         val fourPass = ensureWorkerAndEngine()
 
-        val aspect = recipe.opticalSettings.cropAspectRatio ?: recipe.opticalSettings.aspectRatio
         val maxTex = fourPass.getMaxTextureSize()
-        val (longEdge, shortEdge) =
-            if (maxEdgeOverride != null) {
-                val safeLong = ((maxEdgeOverride.coerceIn(64, minOf(maxTex, ResolutionPreset.MAX_FBO_EDGE_PX)) / 2) * 2)
-                val rawShort = (safeLong.toDouble() * aspect.heightRatio / aspect.widthRatio).roundToInt()
-                val safeShort = ((rawShort / 2) * 2).coerceIn(2, safeLong)
-                safeLong to safeShort
-            } else {
-                recipe.resolutionPreset.computeTargetDimensions(aspect, maxTex)
-            }
-
-        val isPortrait = sourceBitmap.height > sourceBitmap.width
-        val outWidth = if (isPortrait) shortEdge else longEdge
-        val outHeight = if (isPortrait) longEdge else shortEdge
+        val (outWidth, outHeight) =
+            GlMath.computeExportDimensions(
+                opticalSettings = recipe.opticalSettings,
+                resolutionPreset = recipe.resolutionPreset,
+                sourceWidth = sourceBitmap.width,
+                sourceHeight = sourceBitmap.height,
+                maxTexSize = maxTex,
+                maxEdgeOverride = maxEdgeOverride,
+                isPreComposited = recipe.isPreComposited
+            )
+        val (rotW, rotH) =
+            GlMath.computeRotatedDimensions(
+                width = sourceBitmap.width,
+                height = sourceBitmap.height,
+                rotationDegrees = recipe.opticalSettings.rotationDegrees
+            )
+        val inputAspect = rotW.toFloat() / rotH.coerceAtLeast(1).toFloat()
+        val texMatrix = GlMath.computeBitmapTexMatrix(recipe.opticalSettings.rotationDegrees)
+        val effectiveGains =
+            fallbackGains.copy(
+                shaderNoiseBoost =
+                GlMath.computeEffectiveNoiseBoost(
+                    fallbackNoiseBoost = fallbackGains.shaderNoiseBoost,
+                    grainBoost = recipe.opticalSettings.grainBoost
+                )
+            )
 
         val inputTexId = AssetMetadataLoader.uploadTexture2D(sourceBitmap, recycleBitmap = false)
         val (outputFboId, _) = ensureCachedOutputFbo(outWidth, outHeight)
@@ -171,17 +175,18 @@ class OffscreenGlExporter private constructor(
                     opticalSettings = recipe.opticalSettings,
                     stampConfig = recipe.stampConfig,
                     stampText = stampText,
-                    fallbackGains = fallbackGains,
+                    fallbackGains = effectiveGains,
                     isPreviewHoldOriginal = isHoldOriginal,
                     splitCompareRatio = splitCompareRatio,
                     randomSeed = recipe.randomSeed,
-                    inputAspectRatio = sourceBitmap.width.toFloat() / sourceBitmap.height.coerceAtLeast(1).toFloat(),
-                    skipStamp = skipStamp
+                    inputAspectRatio = inputAspect,
+                    skipStamp = skipStamp || recipe.isPreComposited,
+                    isPreComposited = recipe.isPreComposited
                 )
 
             fourPass.render(
                 inputTextureId = inputTexId,
-                texMatrix = bitmapTexMatrix,
+                texMatrix = texMatrix,
                 targetWidth = outWidth,
                 targetHeight = outHeight,
                 outputFboId = outputFboId,
@@ -241,6 +246,15 @@ class OffscreenGlExporter private constructor(
                     frameStyle = FrameBorderStyle.NONE,
                     cropAspectRatio = null
                 )
+            val panelTexMatrix = GlMath.computeBitmapTexMatrix(recipe.opticalSettings.rotationDegrees)
+            val effectiveGains =
+                fallbackGains.copy(
+                    shaderNoiseBoost =
+                    GlMath.computeEffectiveNoiseBoost(
+                        fallbackNoiseBoost = fallbackGains.shaderNoiseBoost,
+                        grainBoost = recipe.opticalSettings.grainBoost
+                    )
+                )
 
             for (i in 0 until 4) {
                 val srcBitmap = frames[i % frames.size]
@@ -256,21 +270,27 @@ class OffscreenGlExporter private constructor(
                         outputWidth = outWidth,
                         outputHeight = outHeight
                     )
+                val (rotW, rotH) =
+                    GlMath.computeRotatedDimensions(
+                        width = srcBitmap.width,
+                        height = srcBitmap.height,
+                        rotationDegrees = recipe.opticalSettings.rotationDegrees
+                    )
                 val panelParams =
                     GlRenderParams(
                         profile = profile,
                         opticalSettings = panelOptical,
                         stampConfig = recipe.stampConfig,
                         stampText = "",
-                        fallbackGains = fallbackGains,
+                        fallbackGains = effectiveGains,
                         randomSeed = recipe.randomSeed + i,
-                        inputAspectRatio = srcBitmap.width.toFloat() / srcBitmap.height.coerceAtLeast(1).toFloat(),
+                        inputAspectRatio = rotW.toFloat() / rotH.coerceAtLeast(1).toFloat(),
                         skipStamp = true
                     )
 
                 fourPass.render(
                     inputTextureId = inputTexId,
-                    texMatrix = bitmapTexMatrix,
+                    texMatrix = panelTexMatrix,
                     targetWidth = vp.width,
                     targetHeight = vp.height,
                     outputFboId = compositeFboId,
@@ -289,7 +309,7 @@ class OffscreenGlExporter private constructor(
                     opticalSettings = recipe.opticalSettings,
                     stampConfig = recipe.stampConfig,
                     stampText = stampText,
-                    fallbackGains = fallbackGains,
+                    fallbackGains = effectiveGains,
                     randomSeed = recipe.randomSeed,
                     skipStamp = skipStamp
                 )

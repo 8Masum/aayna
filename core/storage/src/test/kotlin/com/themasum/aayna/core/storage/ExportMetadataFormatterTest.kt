@@ -69,7 +69,21 @@ class ExportMetadataFormatterTest {
         val videoName = ExportMetadataFormatter.formatVideoFileName(profile, recipe.capturedAtEpochMs, ZoneOffset.UTC)
         assertEquals("AAYNA_Z30_20240615_143045_007.mp4", videoName)
 
+        val videoNameWithSuffix =
+            ExportMetadataFormatter.formatVideoFileName(
+                profile = profile,
+                capturedAtMs = recipe.capturedAtEpochMs,
+                zoneId = ZoneOffset.UTC,
+                suffix = "video"
+            )
+        assertEquals("AAYNA_Z30_20240615_143045_007_video.mp4", videoNameWithSuffix)
+
         val makerNote = ExportMetadataFormatter.formatMakerNote(profile, recipe)
         assertEquals("AAYNA;cam=${profile.id};media=STILL;skin=skin_charcoal_metal", makerNote)
+    }
+
+    @Test
+    fun `EXIF_SOFTWARE reflects Aayna v2_5`() {
+        assertEquals("Aayna v2.5", MediaStoreExporter.EXIF_SOFTWARE)
     }
 }

@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.opengl.EGL14
 import android.opengl.EGLSurface
 import android.opengl.GLES30
-import android.opengl.Matrix
 import android.view.Surface
 import com.themasum.aayna.core.model.GlDiagnosticsInfo
 import com.themasum.aayna.core.model.PassShaderStatus
@@ -45,13 +44,6 @@ class StudioGlPreviewRenderer private constructor(
     private var sourceWidth = 0
     private var sourceHeight = 0
 
-    private val bitmapTexMatrix =
-        FloatArray(16).apply {
-            Matrix.setIdentityM(this, 0)
-            Matrix.translateM(this, 0, 0f, 1f, 0f)
-            Matrix.scaleM(this, 0, 1f, -1f, 1f)
-        }
-
     fun attachSurface(surface: Surface, width: Int, height: Int) {
         if (released.get() || glEngine.isReleased()) return
         glEngine.post {
@@ -77,8 +69,10 @@ class StudioGlPreviewRenderer private constructor(
 
     fun detachSurface() {
         if (glEngine.isReleased()) return
-        glEngine.post {
-            destroyWindowSurfaceOnGlThread()
+        runCatching {
+            glEngine.runBlocking {
+                destroyWindowSurfaceOnGlThread()
+            }
         }
     }
 
@@ -156,15 +150,27 @@ class StudioGlPreviewRenderer private constructor(
         if (surfaceWidth <= 0 || surfaceHeight <= 0) return
         if (!glEngine.makeCurrent(windowSurface)) return
 
-        val isPortrait = sourceHeight > sourceWidth
-        val targetRatio = GlMath.computeEffectiveAspectRatio(params.opticalSettings, isPortrait)
+        val (rotW, rotH) =
+            GlMath.computeRotatedDimensions(
+                width = sourceWidth,
+                height = sourceHeight,
+                rotationDegrees = params.opticalSettings.rotationDegrees
+            )
+        val isPortrait = rotH > rotW
+        val inputAspect = rotW.toFloat() / rotH.coerceAtLeast(1).toFloat()
+        val targetRatio =
+            if (params.isPreComposited && params.opticalSettings.cropAspectRatio == null) {
+                inputAspect
+            } else {
+                GlMath.computeEffectiveAspectRatio(params.opticalSettings, isPortrait)
+            }
         val surfaceRatio = surfaceWidth.toFloat() / surfaceHeight.toFloat()
 
         val (vpW, vpH) =
             if (surfaceRatio > targetRatio) {
-                (surfaceHeight * targetRatio).roundToInt().coerceAtLeast(2) to surfaceHeight
+                (surfaceHeight * targetRatio).roundToInt().coerceIn(2, surfaceWidth) to surfaceHeight
             } else {
-                surfaceWidth to (surfaceWidth / targetRatio).roundToInt().coerceAtLeast(2)
+                surfaceWidth to (surfaceWidth / targetRatio).roundToInt().coerceIn(2, surfaceHeight)
             }
         val vpX = (surfaceWidth - vpW) / 2
         val vpY = (surfaceHeight - vpH) / 2
@@ -174,14 +180,12 @@ class StudioGlPreviewRenderer private constructor(
         GLES30.glClearColor(0f, 0f, 0f, 1f)
         GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
 
-        val effectiveParams =
-            params.copy(
-                inputAspectRatio = sourceWidth.toFloat() / sourceHeight.coerceAtLeast(1).toFloat()
-            )
+        val effectiveParams = params.copy(inputAspectRatio = inputAspect)
+        val texMatrix = GlMath.computeBitmapTexMatrix(params.opticalSettings.rotationDegrees)
 
         glEngine.fourPassEngine.render(
             inputTextureId = sourceTexId,
-            texMatrix = bitmapTexMatrix,
+            texMatrix = texMatrix,
             targetWidth = vpW,
             targetHeight = vpH,
             outputFboId = 0,

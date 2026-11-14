@@ -2,6 +2,13 @@ package com.themasum.aayna.core.camera
 
 data class ExifTransform(val rotationDegrees: Int, val mirrorHorizontal: Boolean)
 
+data class NormalizedPoint(val x: Float, val y: Float)
+
+enum class TransformOperation {
+    ROTATE_CLOCKWISE,
+    MIRROR_HORIZONTAL
+}
+
 object BitmapDecodeMath {
     const val DEFAULT_MAX_LONG_EDGE: Int = 4096
 
@@ -65,5 +72,35 @@ object BitmapDecodeMath {
             rotationDegrees = rotation,
             mirrorHorizontal = mirrorHorizontal
         )
+    }
+
+    /**
+     * Returns the ordered transform steps for [transform]: clockwise rotation into upright display
+     * coordinates always runs before horizontal mirroring.
+     */
+    fun resolveTransformOrder(transform: ExifTransform): List<TransformOperation> = buildList {
+        if (((transform.rotationDegrees % 360) + 360) % 360 != 0) {
+            add(TransformOperation.ROTATE_CLOCKWISE)
+        }
+        if (transform.mirrorHorizontal) {
+            add(TransformOperation.MIRROR_HORIZONTAL)
+        }
+    }
+
+    /**
+     * Applies [transform] to a normalized `[0f, 1f] x [0f, 1f]` point (top-left origin, `+y` down)
+     * in upright display order: clockwise rotation first, then horizontal mirror in upright space.
+     */
+    fun applyTransformToNormalizedPoint(x: Float, y: Float, transform: ExifTransform): NormalizedPoint {
+        val normalizedRotation = ((transform.rotationDegrees % 360) + 360) % 360
+        val (rx, ry) =
+            when (normalizedRotation) {
+                90 -> (1f - y) to x
+                180 -> (1f - x) to (1f - y)
+                270 -> y to (1f - x)
+                else -> x to y
+            }
+        val finalX = if (transform.mirrorHorizontal) 1f - rx else rx
+        return NormalizedPoint(x = finalX, y = ry)
     }
 }

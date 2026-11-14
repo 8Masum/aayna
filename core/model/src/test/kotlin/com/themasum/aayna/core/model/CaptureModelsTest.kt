@@ -1,6 +1,8 @@
 package com.themasum.aayna.core.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -36,7 +38,10 @@ class CaptureModelsTest {
                     aspectRatio = AspectRatioPreset.RATIO_3_2,
                     cropAspectRatio = AspectRatioPreset.RATIO_1_1,
                     straightenDegrees = 2.5f,
-                    frameStyle = FrameBorderStyle.DV_TIMECODE
+                    frameStyle = FrameBorderStyle.DV_TIMECODE,
+                    rotationDegrees = 90,
+                    grainBoost = 0.45f,
+                    cropPortraitOverride = false
                 ),
                 stampConfig =
                 StampConfig(
@@ -51,7 +56,8 @@ class CaptureModelsTest {
                 ),
                 caption = "Night walk",
                 videoDurationMs = 12_500L,
-                burstFrameCount = 1
+                burstFrameCount = 1,
+                isPreComposited = true
             )
 
         val encoded = AaynaJson.encodeRecipe(recipe)
@@ -104,6 +110,40 @@ class CaptureModelsTest {
         assertEquals(-1f, extreme.shadows, 0.0001f)
         assertEquals(1f, extreme.sharpen, 0.0001f)
         assertEquals(OpticalSettings.MAX_STRAIGHTEN_DEGREES, extreme.straightenDegrees, 0.0001f)
+
+        val rotAndGrain =
+            OpticalSettings(
+                rotationDegrees = -90,
+                grainBoost = 2.5f
+            ).clamped()
+        assertEquals(270, rotAndGrain.rotationDegrees)
+        assertEquals(OpticalSettings.MAX_GRAIN_BOOST, rotAndGrain.grainBoost, 0.0001f)
+
+        assertEquals(0, OpticalSettings(rotationDegrees = 360).clamped().rotationDegrees)
+        assertEquals(90, OpticalSettings(rotationDegrees = 450).clamped().rotationDegrees)
+        assertEquals(0, OpticalSettings(rotationDegrees = 44).clamped().rotationDegrees)
+        assertEquals(90, OpticalSettings(rotationDegrees = 45).clamped().rotationDegrees)
+        assertEquals(180, OpticalSettings(rotationDegrees = -180).clamped().rotationDegrees)
+        assertEquals(0f, OpticalSettings(grainBoost = -0.4f).clamped().grainBoost, 0.0001f)
+    }
+
+    @Test
+    fun `CaptureRecipe decodes legacy json without v2_5 fields using safe defaults`() {
+        val legacyJson =
+            """
+            {
+              "recipeId": "legacy-1",
+              "cameraId": "z30",
+              "capturedAtEpochMs": 1700000000000,
+              "randomSeed": 99
+            }
+            """.trimIndent()
+        val decoded = AaynaJson.decodeRecipe(legacyJson)
+        assertEquals("legacy-1", decoded.recipeId)
+        assertFalse(decoded.isPreComposited)
+        assertEquals(0, decoded.opticalSettings.rotationDegrees)
+        assertEquals(0f, decoded.opticalSettings.grainBoost, 0.0001f)
+        assertNull(decoded.opticalSettings.cropPortraitOverride)
     }
 
     @Test

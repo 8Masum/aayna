@@ -315,4 +315,124 @@ class CameraPolicyMathTest {
         assertEquals(AspectRatio.RATIO_4_3, CameraPolicyMath.toCameraXAspectRatio(AspectRatioPreset.RATIO_3_2))
         assertEquals(AspectRatio.RATIO_4_3, CameraPolicyMath.toCameraXAspectRatio(AspectRatioPreset.RATIO_1_1))
     }
+
+    @Test
+    fun `buildBindAttemptPlan prioritizes video and effect in video mode`() {
+        val withEffect =
+            CameraPolicyMath.buildBindAttemptPlan(
+                hasVideoUseCase = true,
+                hasEffect = true,
+                preferVideoMode = true
+            )
+        assertEquals(
+            listOf(
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = true, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = false, includeVideoCapture = true, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = false, includeVideoCapture = true, includeEffect = false),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = false)
+            ),
+            withEffect
+        )
+
+        val withoutEffect =
+            CameraPolicyMath.buildBindAttemptPlan(
+                hasVideoUseCase = true,
+                hasEffect = false,
+                preferVideoMode = true
+            )
+        assertEquals(
+            listOf(
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = true, includeEffect = false),
+                CameraBindAttempt(includeImageCapture = false, includeVideoCapture = true, includeEffect = false),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = false)
+            ),
+            withoutEffect
+        )
+    }
+
+    @Test
+    fun `buildBindAttemptPlan preserves photo priority when preferVideoMode is false`() {
+        val hybridPlan =
+            CameraPolicyMath.buildBindAttemptPlan(
+                hasVideoUseCase = true,
+                hasEffect = true,
+                preferVideoMode = false
+            )
+        assertEquals(
+            listOf(
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = true, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = true, includeEffect = false),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = false)
+            ),
+            hybridPlan
+        )
+
+        val photoOnlyPlan =
+            CameraPolicyMath.buildBindAttemptPlan(
+                hasVideoUseCase = false,
+                hasEffect = true,
+                preferVideoMode = true
+            )
+        assertEquals(
+            listOf(
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = true),
+                CameraBindAttempt(includeImageCapture = true, includeVideoCapture = false, includeEffect = false)
+            ),
+            photoOnlyPlan
+        )
+    }
+
+    @Test
+    fun `resolveBindFallbackError surfaces video loss in video mode and effect loss`() {
+        assertNull(
+            CameraPolicyMath.resolveBindFallbackError(
+                requestedVideoUseCase = true,
+                boundVideoUseCase = true,
+                requestedEffect = true,
+                boundEffect = true,
+                preferVideoMode = true
+            )
+        )
+        assertNull(
+            CameraPolicyMath.resolveBindFallbackError(
+                requestedVideoUseCase = true,
+                boundVideoUseCase = false,
+                requestedEffect = true,
+                boundEffect = true,
+                preferVideoMode = false
+            )
+        )
+        assertEquals(
+            "VideoCapture disabled by device HAL fallback",
+            CameraPolicyMath.resolveBindFallbackError(
+                requestedVideoUseCase = true,
+                boundVideoUseCase = false,
+                requestedEffect = true,
+                boundEffect = true,
+                preferVideoMode = true
+            )
+        )
+        assertEquals(
+            "VideoCapture and CameraEffect disabled by device HAL fallback",
+            CameraPolicyMath.resolveBindFallbackError(
+                requestedVideoUseCase = true,
+                boundVideoUseCase = false,
+                requestedEffect = true,
+                boundEffect = false,
+                preferVideoMode = true
+            )
+        )
+        assertEquals(
+            "CameraEffect disabled by device HAL fallback",
+            CameraPolicyMath.resolveBindFallbackError(
+                requestedVideoUseCase = true,
+                boundVideoUseCase = true,
+                requestedEffect = true,
+                boundEffect = false,
+                preferVideoMode = true
+            )
+        )
+    }
 }

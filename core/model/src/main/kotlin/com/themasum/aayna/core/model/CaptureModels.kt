@@ -121,7 +121,10 @@ data class OpticalSettings(
     val aspectRatio: AspectRatioPreset = AspectRatioPreset.RATIO_4_3,
     val cropAspectRatio: AspectRatioPreset? = null,
     val straightenDegrees: Float = 0f,
-    val frameStyle: FrameBorderStyle = FrameBorderStyle.NONE
+    val frameStyle: FrameBorderStyle = FrameBorderStyle.NONE,
+    val rotationDegrees: Int = 0,
+    val grainBoost: Float = 0f,
+    val cropPortraitOverride: Boolean? = null
 ) {
     /**
      * Returns a copy whose normalized UI slider adjustments are clamped to canonical bounds.
@@ -137,7 +140,9 @@ data class OpticalSettings(
         lightLeakIntensity = lightLeakIntensity.coerceIn(0f, 1f),
         dustIntensity = dustIntensity.coerceIn(0f, 1f),
         vignetteIntensity = vignetteIntensity.coerceIn(0f, 1f),
-        straightenDegrees = straightenDegrees.coerceIn(MIN_STRAIGHTEN_DEGREES, MAX_STRAIGHTEN_DEGREES)
+        straightenDegrees = straightenDegrees.coerceIn(MIN_STRAIGHTEN_DEGREES, MAX_STRAIGHTEN_DEGREES),
+        rotationDegrees = normalizeRotationDegrees(rotationDegrees),
+        grainBoost = grainBoost.coerceIn(MIN_GRAIN_BOOST, MAX_GRAIN_BOOST)
     )
 
     companion object {
@@ -149,6 +154,13 @@ data class OpticalSettings(
         const val MAX_TONAL_SHIFT = 1f
         const val MIN_STRAIGHTEN_DEGREES = -15f
         const val MAX_STRAIGHTEN_DEGREES = 15f
+        const val MIN_GRAIN_BOOST = 0f
+        const val MAX_GRAIN_BOOST = 1f
+
+        fun normalizeRotationDegrees(degrees: Int): Int {
+            val mod = ((degrees % 360) + 360) % 360
+            return ((mod + 45) / 90 * 90) % 360
+        }
     }
 }
 
@@ -178,7 +190,8 @@ data class CaptureRecipe(
     val stampConfig: StampConfig = StampConfig(),
     val caption: String = "",
     val videoDurationMs: Long = 0L,
-    val burstFrameCount: Int = 1
+    val burstFrameCount: Int = 1,
+    val isPreComposited: Boolean = false
 )
 
 @Serializable

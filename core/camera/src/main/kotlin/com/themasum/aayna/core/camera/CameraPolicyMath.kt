@@ -59,6 +59,12 @@ data class IspOverrideDecision(
 
 data class PreviewBindingPolicy(val useCompatPreview: Boolean, val enableCameraEffect: Boolean)
 
+data class CameraBindAttempt(
+    val includeImageCapture: Boolean,
+    val includeVideoCapture: Boolean,
+    val includeEffect: Boolean
+)
+
 /**
  * Pure-Kotlin Camera2 / CameraX policy math for AE gating, EV clamping, ISP overrides,
  * preview compatibility fallback, and aspect ratio mapping.
@@ -223,6 +229,145 @@ object CameraPolicyMath {
         useCompatPreview = preferCompatPreview || quirkFlags.forceCompatPreview,
         enableCameraEffect = hasSurfaceProcessor && !effectBindingFailed
     )
+
+    fun buildBindAttemptPlan(
+        hasVideoUseCase: Boolean,
+        hasEffect: Boolean,
+        preferVideoMode: Boolean = false
+    ): List<CameraBindAttempt> {
+        if (!hasVideoUseCase) {
+            return if (hasEffect) {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            } else {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            }
+        }
+
+        return if (preferVideoMode) {
+            if (hasEffect) {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = true,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = false,
+                        includeVideoCapture = true,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = false,
+                        includeVideoCapture = true,
+                        includeEffect = false
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            } else {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = true,
+                        includeEffect = false
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = false,
+                        includeVideoCapture = true,
+                        includeEffect = false
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            }
+        } else {
+            if (hasEffect) {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = true,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = true
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = true,
+                        includeEffect = false
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            } else {
+                listOf(
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = true,
+                        includeEffect = false
+                    ),
+                    CameraBindAttempt(
+                        includeImageCapture = true,
+                        includeVideoCapture = false,
+                        includeEffect = false
+                    )
+                )
+            }
+        }
+    }
+
+    fun resolveBindFallbackError(
+        requestedVideoUseCase: Boolean,
+        boundVideoUseCase: Boolean,
+        requestedEffect: Boolean,
+        boundEffect: Boolean,
+        preferVideoMode: Boolean
+    ): String? {
+        val videoDroppedInVideoMode = preferVideoMode && requestedVideoUseCase && !boundVideoUseCase
+        val effectDropped = requestedEffect && !boundEffect
+        return when {
+            videoDroppedInVideoMode && effectDropped ->
+                "VideoCapture and CameraEffect disabled by device HAL fallback"
+            videoDroppedInVideoMode ->
+                "VideoCapture disabled by device HAL fallback"
+            effectDropped ->
+                "CameraEffect disabled by device HAL fallback"
+            else -> null
+        }
+    }
 
     fun toCameraXAspectRatio(preset: AspectRatioPreset): Int = when (preset) {
         AspectRatioPreset.RATIO_16_9 -> androidx.camera.core.AspectRatio.RATIO_16_9

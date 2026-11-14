@@ -159,6 +159,17 @@ class NegativeRepository(
         negativeDao.restoreFromTrash(recipeId = recipeId)
     }
 
+    suspend fun saveD3dBurstFrames(
+        recipeId: String,
+        frames: List<Bitmap>,
+        maxEdgePx: Int = D3dBurstFrameStore.DEFAULT_MAX_EDGE_PX
+    ): List<File> = D3dBurstFrameStore.saveBurstFrames(
+        filesDir = context.filesDir,
+        recipeId = recipeId,
+        frames = frames,
+        maxEdgePx = maxEdgePx
+    )
+
     suspend fun purgeExpiredTrash(
         retentionMs: Long = DEFAULT_TRASH_RETENTION_MS,
         nowEpochMs: Long = System.currentTimeMillis()
@@ -171,11 +182,25 @@ class NegativeRepository(
         negativeDao.purgeExpiredTrash(cutoff)
     }
 
+    suspend fun purgeAllTrashed(): Int = withContext(Dispatchers.IO) {
+        val trashed = negativeDao.getAllTrashed()
+        trashed.forEach { entity ->
+            deleteFilesForEntity(entity)
+        }
+        negativeDao.purgeAllTrashed()
+    }
+
+    suspend fun purgeNegative(recipeId: String) {
+        deleteNegative(recipeId)
+    }
+
     suspend fun deleteNegative(recipeId: String) {
         withContext(Dispatchers.IO) {
             val existing = negativeDao.getById(recipeId)
             if (existing != null) {
                 deleteFilesForEntity(existing)
+            } else {
+                D3dBurstFrameStore.deleteFramesDir(context.filesDir, recipeId)
             }
             negativeDao.deleteById(recipeId)
         }
@@ -210,6 +235,7 @@ class NegativeRepository(
             thumbnailCache?.invalidatePath(entity.thumbnailPath)
             File(entity.thumbnailPath).delete()
         }
+        D3dBurstFrameStore.deleteFramesDir(context.filesDir, entity.recipeId)
     }
 
     private fun sanitizeId(recipeId: String): String = recipeId.replace(Regex("[^A-Za-z0-9_-]+"), "_")

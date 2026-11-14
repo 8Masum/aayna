@@ -18,6 +18,8 @@ import java.io.Closeable
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Concrete [CameraEffect] wrapper exposing CameraX's protected `SurfaceProcessor` constructor
@@ -237,12 +239,10 @@ class AaynaSurfaceProcessor private constructor(
             val outH = size.height.coerceAtLeast(2)
             val surfaceAspect = outW.toFloat() / outH.toFloat()
             val cropTargetAspect =
-                baseParams.opticalSettings.cropAspectRatio?.let {
-                    GlMath.computeEffectiveAspectRatio(
-                        baseParams.opticalSettings,
-                        isPortraitSurface = outH > outW
-                    )
-                } ?: surfaceAspect
+                GlMath.computeEffectiveAspectRatio(
+                    baseParams.opticalSettings,
+                    isPortraitSurface = outH > outW
+                )
 
             val frameParams =
                 baseParams.copy(
@@ -252,16 +252,18 @@ class AaynaSurfaceProcessor private constructor(
             val renderH: Int
             val vpX: Int
             val vpY: Int
-            if (cropTargetAspect != surfaceAspect) {
+            if (abs(cropTargetAspect - surfaceAspect) > 0.005f) {
                 if (surfaceAspect > cropTargetAspect) {
                     renderH = outH
-                    renderW = (outH * cropTargetAspect).toInt().coerceIn(2, outW)
+                    renderW = (outH * cropTargetAspect).roundToInt().coerceIn(2, outW)
                 } else {
                     renderW = outW
-                    renderH = (outW / cropTargetAspect).toInt().coerceIn(2, outH)
+                    renderH = (outW / cropTargetAspect).roundToInt().coerceIn(2, outH)
                 }
                 vpX = (outW - renderW) / 2
                 vpY = (outH - renderH) / 2
+                GLES30.glBindFramebuffer(GLES30.GL_FRAMEBUFFER, 0)
+                GLES30.glViewport(0, 0, outW, outH)
                 GLES30.glClearColor(0f, 0f, 0f, 1f)
                 GLES30.glClear(GLES30.GL_COLOR_BUFFER_BIT)
             } else {

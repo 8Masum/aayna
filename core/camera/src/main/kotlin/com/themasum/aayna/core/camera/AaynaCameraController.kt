@@ -198,6 +198,7 @@ class AaynaCameraController(context: Context) {
         videoQualitySelector: QualitySelector = DEFAULT_VIDEO_QUALITY_SELECTOR,
         preferCompatPreview: Boolean = true,
         useHardwareAeCompatibility: Boolean = this.useHardwareAeCompatibility,
+        preferVideoMode: Boolean = false,
         onEffectError: (Throwable) -> Unit = {}
     ) {
         _cameraError.value = null
@@ -296,10 +297,11 @@ class AaynaCameraController(context: Context) {
                 preview = preview,
                 captureUseCase = captureUseCase,
                 videoUseCase = videoUseCase,
-                effect = effect
+                effect = effect,
+                preferVideoMode = preferVideoMode
             )
         boundCamera = bound.camera
-        imageCapture = captureUseCase
+        imageCapture = bound.imageCapture
         videoCapture = bound.videoCapture
         _isCameraEffectActive.value = bound.effectActive
         attachZoomObserver(bound.camera)
@@ -686,6 +688,7 @@ class AaynaCameraController(context: Context) {
 
     private data class BoundGroupResult(
         val camera: Camera,
+        val imageCapture: ImageCapture?,
         val videoCapture: VideoCapture<Recorder>?,
         val effectActive: Boolean
     )
@@ -698,42 +701,48 @@ class AaynaCameraController(context: Context) {
         preview: Preview,
         captureUseCase: ImageCapture,
         videoUseCase: VideoCapture<Recorder>?,
-        effect: CameraEffect?
+        effect: CameraEffect?,
+        preferVideoMode: Boolean
     ): BoundGroupResult {
         val attempts =
-            buildList {
-                if (effect != null && videoUseCase != null) {
-                    add(Triple(videoUseCase, effect, true))
-                }
-                if (effect != null) {
-                    add(Triple(null, effect, true))
-                }
-                if (videoUseCase != null) {
-                    add(Triple(videoUseCase, null, false))
-                }
-                add(Triple(null, null, false))
-            }
+            CameraPolicyMath.buildBindAttemptPlan(
+                hasVideoUseCase = videoUseCase != null,
+                hasEffect = effect != null,
+                preferVideoMode = preferVideoMode
+            )
 
         var lastError: Throwable? = null
-        for ((attemptVideo, attemptEffect, effectFlag) in attempts) {
+        for (attempt in attempts) {
+            val attemptImage = if (attempt.includeImageCapture) captureUseCase else null
+            val attemptVideo = if (attempt.includeVideoCapture) videoUseCase else null
+            val attemptEffect = if (attempt.includeEffect) effect else null
             try {
                 val groupBuilder =
                     UseCaseGroup.Builder()
                         .setViewPort(viewPort)
                         .addUseCase(preview)
-                        .addUseCase(captureUseCase)
+                attemptImage?.let { groupBuilder.addUseCase(it) }
                 attemptVideo?.let { groupBuilder.addUseCase(it) }
                 attemptEffect?.let { groupBuilder.addEffect(it) }
 
                 provider.unbindAll()
                 val camera = provider.bindToLifecycle(lifecycleOwner, selector, groupBuilder.build())
-                if (effect != null && !effectFlag) {
-                    _cameraError.value = "CameraEffect disabled by device HAL fallback"
+                val fallbackError =
+                    CameraPolicyMath.resolveBindFallbackError(
+                        requestedVideoUseCase = videoUseCase != null,
+                        boundVideoUseCase = attemptVideo != null,
+                        requestedEffect = effect != null,
+                        boundEffect = attemptEffect != null,
+                        preferVideoMode = preferVideoMode
+                    )
+                if (fallbackError != null) {
+                    _cameraError.value = fallbackError
                 }
                 return BoundGroupResult(
                     camera = camera,
+                    imageCapture = attemptImage,
                     videoCapture = attemptVideo,
-                    effectActive = effectFlag
+                    effectActive = attemptEffect != null
                 )
             } catch (t: Throwable) {
                 lastError = t
@@ -884,11 +893,11 @@ class AaynaCameraController(context: Context) {
             return source
         }
         val matrix = Matrix()
-        if (transform.mirrorHorizontal) {
-            matrix.postScale(-1f, 1f, source.width / 2f, source.height / 2f)
-        }
         if (transform.rotationDegrees != 0) {
             matrix.postRotate(transform.rotationDegrees.toFloat())
+        }
+        if (transform.mirrorHorizontal) {
+            matrix.postScale(-1f, 1f)
         }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }

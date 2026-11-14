@@ -160,4 +160,67 @@ class BitmapDecodeMathTest {
         assertEquals(90, rearIgnoresFrontQuirk.rotationDegrees)
         assertTrue(rearIgnoresFrontQuirk.mirrorHorizontal)
     }
+
+    @Test
+    fun `resolveTransformOrder rotates into upright display space before horizontal mirror`() {
+        assertEquals(
+            listOf(TransformOperation.ROTATE_CLOCKWISE, TransformOperation.MIRROR_HORIZONTAL),
+            BitmapDecodeMath.resolveTransformOrder(ExifTransform(rotationDegrees = 90, mirrorHorizontal = true))
+        )
+        assertEquals(
+            listOf(TransformOperation.ROTATE_CLOCKWISE, TransformOperation.MIRROR_HORIZONTAL),
+            BitmapDecodeMath.resolveTransformOrder(ExifTransform(rotationDegrees = 270, mirrorHorizontal = true))
+        )
+        assertEquals(
+            listOf(TransformOperation.MIRROR_HORIZONTAL),
+            BitmapDecodeMath.resolveTransformOrder(ExifTransform(rotationDegrees = 0, mirrorHorizontal = true))
+        )
+        assertEquals(
+            emptyList<TransformOperation>(),
+            BitmapDecodeMath.resolveTransformOrder(ExifTransform(rotationDegrees = 0, mirrorHorizontal = false))
+        )
+    }
+
+    @Test
+    fun `applyTransformToNormalizedPoint mirrors 90 and 270 horizontally without vertical flip`() {
+        // Sensor point at (x=0.2, y=0.1); after 90 CW upright point is (0.9, 0.2) (top-right).
+        // Horizontal mirror in upright space must flip X -> 0.1 and keep Y = 0.2 (still near top).
+        val unmirrored90 =
+            BitmapDecodeMath.applyTransformToNormalizedPoint(
+                x = 0.2f,
+                y = 0.1f,
+                transform = ExifTransform(rotationDegrees = 90, mirrorHorizontal = false)
+            )
+        assertEquals(0.9f, unmirrored90.x, 0.0001f)
+        assertEquals(0.2f, unmirrored90.y, 0.0001f)
+
+        val mirrored90 =
+            BitmapDecodeMath.applyTransformToNormalizedPoint(
+                x = 0.2f,
+                y = 0.1f,
+                transform = ExifTransform(rotationDegrees = 90, mirrorHorizontal = true)
+            )
+        assertEquals(0.1f, mirrored90.x, 0.0001f)
+        assertEquals(unmirrored90.y, mirrored90.y, 0.0001f)
+
+        // Sensor point at (x=0.8, y=0.1); after 270 CW upright point is (0.1, 0.2) (top-left).
+        // Horizontal mirror in upright space must flip X -> 0.9 and keep Y = 0.2 (not 0.8 upside-down).
+        val unmirrored270 =
+            BitmapDecodeMath.applyTransformToNormalizedPoint(
+                x = 0.8f,
+                y = 0.1f,
+                transform = ExifTransform(rotationDegrees = 270, mirrorHorizontal = false)
+            )
+        assertEquals(0.1f, unmirrored270.x, 0.0001f)
+        assertEquals(0.2f, unmirrored270.y, 0.0001f)
+
+        val mirrored270 =
+            BitmapDecodeMath.applyTransformToNormalizedPoint(
+                x = 0.8f,
+                y = 0.1f,
+                transform = ExifTransform(rotationDegrees = 270, mirrorHorizontal = true)
+            )
+        assertEquals(0.9f, mirrored270.x, 0.0001f)
+        assertEquals(unmirrored270.y, mirrored270.y, 0.0001f)
+    }
 }

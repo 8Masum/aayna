@@ -14,6 +14,7 @@ import com.themasum.aayna.core.model.StampAtlasMeta
 import com.themasum.aayna.core.model.StampConfig
 import com.themasum.aayna.core.model.StampFontStyle
 import com.themasum.aayna.core.model.StampStyle
+import com.themasum.aayna.core.model.WhiteBalancePreset
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
@@ -349,9 +350,53 @@ class AaynaFourPassEngine(
         val fboStarAtt = fboStar ?: return
         val fbo2Att = fbo2 ?: return
 
-        val lut = getOrLoadLut(params.profile.lutAssetPath, params.profile.lutCubeAssetPath)
         val targetAspect = safeW.toFloat() / safeH.toFloat()
         val cropScale = GlMath.computeAspectCropScale(params.inputAspectRatio, targetAspect)
+
+        if (params.isPreComposited) {
+            val neutralParams =
+                params.copy(
+                    opticalSettings =
+                    params.opticalSettings.copy(
+                        whiteBalance = WhiteBalancePreset.AUTO,
+                        warmthShift = 0f,
+                        highlights = 0f,
+                        shadows = 0f,
+                        straightenDegrees = 0f,
+                        lensAttachment = LensAttachment.STANDARD,
+                        flashMode = FlashMode.OFF,
+                        frameStyle = FrameBorderStyle.NONE
+                    ),
+                    isPreviewHoldOriginal = true,
+                    splitCompareRatio = 0f,
+                    skipStamp = true
+                )
+            executePass1(
+                fbo1Att = fbo1Att,
+                inputTextureId = inputTextureId,
+                texMatrix = texMatrix,
+                cropScale = cropScale,
+                targetAspect = targetAspect,
+                params = neutralParams,
+                useOes = useOes
+            )
+            executePass4(
+                fbo1Att = fbo1Att,
+                fbo2Att = fbo2Att,
+                outputFboId = outputFboId,
+                viewportX = viewportX,
+                viewportY = viewportY,
+                viewportWidth = viewportWidth,
+                viewportHeight = viewportHeight,
+                targetWidth = safeW,
+                targetHeight = safeH,
+                targetAspect = targetAspect,
+                params = neutralParams
+            )
+            return
+        }
+
+        val lut = getOrLoadLut(params.profile.lutAssetPath, params.profile.lutCubeAssetPath)
 
         // PASS 1 -> FBO_1
         executePass1(
@@ -478,12 +523,15 @@ class AaynaFourPassEngine(
         GLES30.glUniform1i(uniforms.uLensMode, params.opticalSettings.lensAttachment.ordinal)
 
         val fisheyeStrength =
-            when (params.opticalSettings.lensAttachment) {
-                LensAttachment.FISHEYE -> maxOf(params.profile.optics.fisheyeDefault, 0.85f)
+            when {
+                params.isPreComposited -> 0f
+                params.opticalSettings.lensAttachment == LensAttachment.FISHEYE ->
+                    maxOf(params.profile.optics.fisheyeDefault, 0.85f)
                 else -> params.profile.optics.fisheyeDefault
             }
         GLES30.glUniform1f(uniforms.uFisheyeStrength, fisheyeStrength)
-        GLES30.glUniform1f(uniforms.uCaStrength, params.profile.optics.caStrength)
+        val caStrength = if (params.isPreComposited) 0f else params.profile.optics.caStrength
+        GLES30.glUniform1f(uniforms.uCaStrength, caStrength)
 
         val bradfordMatrix =
             GlMath.computeBradfordWbMatrix(
@@ -684,7 +732,12 @@ class AaynaFourPassEngine(
         GLES30.glUniform1i(uniforms.uGrainType, grainTypeInt)
         GLES30.glUniform1f(uniforms.uLumaGrainStrength, params.profile.grain.lumaStrength)
         GLES30.glUniform1f(uniforms.uChromaGrainStrength, params.profile.grain.chromaStrength)
-        GLES30.glUniform1f(uniforms.uShaderNoiseBoost, params.fallbackGains.shaderNoiseBoost)
+        val effectiveNoiseBoost =
+            GlMath.computeEffectiveNoiseBoost(
+                fallbackNoiseBoost = params.fallbackGains.shaderNoiseBoost,
+                grainBoost = params.opticalSettings.grainBoost
+            )
+        GLES30.glUniform1f(uniforms.uShaderNoiseBoost, effectiveNoiseBoost)
 
         val vigStrength =
             maxOf(params.profile.optics.vignetteStrength, params.opticalSettings.vignetteIntensity)

@@ -3,6 +3,7 @@ package com.themasum.aayna.core.gl
 import com.themasum.aayna.core.model.AspectRatioPreset
 import com.themasum.aayna.core.model.FrameWindowMeta
 import com.themasum.aayna.core.model.OpticalSettings
+import com.themasum.aayna.core.model.ResolutionPreset
 import com.themasum.aayna.core.model.StampAtlasMeta
 import kotlin.math.abs
 import kotlin.math.cos
@@ -232,6 +233,114 @@ class GlMathTest {
         val cropped = base.copy(cropAspectRatio = AspectRatioPreset.RATIO_16_9)
         assertEquals(16f / 9f, GlMath.computeEffectiveAspectRatio(cropped, isPortraitSurface = false), 1e-5f)
         assertEquals(9f / 16f, GlMath.computeEffectiveAspectRatio(cropped, isPortraitSurface = true), 1e-5f)
+
+        val forcedLandscape = cropped.copy(cropPortraitOverride = false)
+        assertEquals(16f / 9f, GlMath.computeEffectiveAspectRatio(forcedLandscape, isPortraitSurface = true), 1e-5f)
+
+        val forcedPortrait = cropped.copy(cropPortraitOverride = true)
+        assertEquals(9f / 16f, GlMath.computeEffectiveAspectRatio(forcedPortrait, isPortraitSurface = false), 1e-5f)
+
+        // cropPortraitOverride only applies when cropAspectRatio is set
+        val uncroppedWithOverride = base.copy(cropAspectRatio = null, cropPortraitOverride = false)
+        assertEquals(
+            3f / 4f,
+            GlMath.computeEffectiveAspectRatio(uncroppedWithOverride, isPortraitSurface = true),
+            1e-5f
+        )
+    }
+
+    @Test
+    fun computeEffectiveNoiseBoost_matchesStudioGrainScaleAndIsoFallback() {
+        assertEquals(0f, GlMath.computeEffectiveNoiseBoost(0f, 0f), 1e-6f)
+        assertEquals(0.7f, GlMath.computeEffectiveNoiseBoost(0f, 0.5f), 1e-5f)
+        assertEquals(1.4f, GlMath.computeEffectiveNoiseBoost(0.4f, 2.0f), 1e-5f)
+        assertEquals(0.9f, GlMath.computeEffectiveNoiseBoost(0.9f, 0.2f), 1e-5f)
+    }
+
+    @Test
+    fun computeExportDimensions_handlesRotationPortraitOverrideAndPreComposited() {
+        // 4000x3000 landscape rotated 90 deg -> portrait 3:4
+        val rotated =
+            GlMath.computeExportDimensions(
+                opticalSettings = OpticalSettings(aspectRatio = AspectRatioPreset.RATIO_4_3, rotationDegrees = 90),
+                resolutionPreset = ResolutionPreset.DIGICAM_5MP,
+                sourceWidth = 4000,
+                sourceHeight = 3000,
+                maxTexSize = 4096
+            )
+        assertEquals(1920 to 2560, rotated)
+
+        // Portrait source forced to landscape 16:9 crop via cropPortraitOverride = false
+        val forcedLandscapeCrop =
+            GlMath.computeExportDimensions(
+                opticalSettings =
+                OpticalSettings(
+                    aspectRatio = AspectRatioPreset.RATIO_4_3,
+                    cropAspectRatio = AspectRatioPreset.RATIO_16_9,
+                    cropPortraitOverride = false
+                ),
+                resolutionPreset = ResolutionPreset.DIGICAM_5MP,
+                sourceWidth = 3000,
+                sourceHeight = 4000,
+                maxTexSize = 4096
+            )
+        assertEquals(2560 to 1440, forcedLandscapeCrop)
+
+        // Pre-composited 1:1 4-strip with aspectRatio = 4:3 preserves 1:1 instead of cropping to 4:3
+        val preCompositedStrip =
+            GlMath.computeExportDimensions(
+                opticalSettings = OpticalSettings(aspectRatio = AspectRatioPreset.RATIO_4_3),
+                resolutionPreset = ResolutionPreset.DIGICAM_5MP,
+                sourceWidth = 1024,
+                sourceHeight = 1024,
+                maxTexSize = 4096,
+                maxEdgeOverride = 1024,
+                isPreComposited = true
+            )
+        assertEquals(1024 to 1024, preCompositedStrip)
+    }
+
+    @Test
+    fun computeBitmapTexMatrix_rotatesTopDownCornersClockwise() {
+        // fboUv (0, 1) = output top-left; (1, 1) = output top-right; (0, 0) = output bottom-left
+        val m0 = GlMath.computeBitmapTexMatrix(0)
+        assertEquals(0f to 0f, GlMath.transformUv(m0, 0f, 1f))
+        assertEquals(1f to 0f, GlMath.transformUv(m0, 1f, 1f))
+        assertEquals(0f to 1f, GlMath.transformUv(m0, 0f, 0f))
+
+        val m90 = GlMath.computeBitmapTexMatrix(90)
+        assertEquals(0f to 1f, GlMath.transformUv(m90, 0f, 1f)) // top-left <- src bottom-left
+        assertEquals(0f to 0f, GlMath.transformUv(m90, 1f, 1f)) // top-right <- src top-left
+        assertEquals(1f to 1f, GlMath.transformUv(m90, 0f, 0f)) // bottom-left <- src bottom-right
+
+        val m180 = GlMath.computeBitmapTexMatrix(180)
+        assertEquals(1f to 1f, GlMath.transformUv(m180, 0f, 1f)) // top-left <- src bottom-right
+        assertEquals(0f to 1f, GlMath.transformUv(m180, 1f, 1f)) // top-right <- src bottom-left
+
+        val m270 = GlMath.computeBitmapTexMatrix(270)
+        assertEquals(1f to 0f, GlMath.transformUv(m270, 0f, 1f)) // top-left <- src top-right
+        assertEquals(1f to 1f, GlMath.transformUv(m270, 1f, 1f)) // top-right <- src bottom-right
+        assertEquals(0f to 0f, GlMath.transformUv(m270, 0f, 0f)) // bottom-left <- src top-left
+    }
+
+    @Test
+    fun computeOesTexMatrix_combinesSurfaceTextureFlipAndRotation() {
+        val stFlipY =
+            floatArrayOf(
+                1f, 0f, 0f, 0f,
+                0f, -1f, 0f, 0f,
+                0f, 0f, 1f, 0f,
+                0f, 1f, 0f, 1f
+            )
+        val oes90 = GlMath.computeOesTexMatrix(stFlipY, 90)
+        // Output top-left (0,1) -> raw bottom-left (0,0) -> after Y-flip (0,1)
+        assertEquals(0f to 1f, GlMath.transformUv(oes90, 0f, 1f))
+        // Output top-right (1,1) -> raw top-left (0,1) -> after Y-flip (0,0)
+        assertEquals(0f to 0f, GlMath.transformUv(oes90, 1f, 1f))
+
+        val oes270 = GlMath.computeOesTexMatrix(stFlipY, 270)
+        // Output top-left (0,1) -> raw top-right (1,1) -> after Y-flip (1,0)
+        assertEquals(1f to 0f, GlMath.transformUv(oes270, 0f, 1f))
     }
 
     @Test

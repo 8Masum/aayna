@@ -2,6 +2,7 @@ package com.themasum.aayna.core.gl
 
 import com.themasum.aayna.core.model.FrameWindowMeta
 import com.themasum.aayna.core.model.OpticalSettings
+import com.themasum.aayna.core.model.ResolutionPreset
 import com.themasum.aayna.core.model.StampAtlasMeta
 import kotlin.math.PI
 import kotlin.math.abs
@@ -118,15 +119,181 @@ object GlMath {
 
     /**
      * Computes the effective target aspect ratio from [opticalSettings], honoring
-     * `cropAspectRatio` when set and flipping to portrait when [isPortraitSurface] is true.
+     * `cropAspectRatio` and `cropPortraitOverride` when set, and falling back to
+     * [isPortraitSurface] when orientation is not overridden.
      */
     fun computeEffectiveAspectRatio(opticalSettings: OpticalSettings, isPortraitSurface: Boolean): Float {
         val preset = opticalSettings.cropAspectRatio ?: opticalSettings.aspectRatio
-        return if (isPortraitSurface) {
+        val overridePortrait = opticalSettings.cropPortraitOverride
+        val effectivePortrait =
+            if (opticalSettings.cropAspectRatio != null && overridePortrait != null) {
+                overridePortrait
+            } else {
+                isPortraitSurface
+            }
+        return if (effectivePortrait) {
             preset.heightRatio.toFloat() / preset.widthRatio.toFloat()
         } else {
             preset.widthRatio.toFloat() / preset.heightRatio.toFloat()
         }
+    }
+
+    /**
+     * Computes the effective shader grain noise boost, honoring both [fallbackNoiseBoost]
+     * (from ISO/Studio) and [grainBoost] (`0f..1f`) on [OpticalSettings].
+     */
+    fun computeEffectiveNoiseBoost(fallbackNoiseBoost: Float, grainBoost: Float): Float {
+        val clampedBoost = grainBoost.coerceIn(OpticalSettings.MIN_GRAIN_BOOST, OpticalSettings.MAX_GRAIN_BOOST) * 1.4f
+        return maxOf(fallbackNoiseBoost.coerceAtLeast(0f), clampedBoost)
+    }
+
+    /**
+     * Returns `(width, height)` after rotating clockwise by [rotationDegrees] (`0/90/180/270`).
+     */
+    fun computeRotatedDimensions(width: Int, height: Int, rotationDegrees: Int): Pair<Int, Int> {
+        val safeW = width.coerceAtLeast(1)
+        val safeH = height.coerceAtLeast(1)
+        val norm = OpticalSettings.normalizeRotationDegrees(rotationDegrees)
+        return if (norm == 90 || norm == 270) {
+            safeH to safeW
+        } else {
+            safeW to safeH
+        }
+    }
+
+    /**
+     * Computes even-aligned offscreen export `(width, height)` honoring `rotationDegrees`,
+     * `cropAspectRatio`, `cropPortraitOverride`, `isPreComposited`, and [maxEdgeOverride].
+     */
+    fun computeExportDimensions(
+        opticalSettings: OpticalSettings,
+        resolutionPreset: ResolutionPreset,
+        sourceWidth: Int,
+        sourceHeight: Int,
+        maxTexSize: Int,
+        maxEdgeOverride: Int? = null,
+        isPreComposited: Boolean = false
+    ): Pair<Int, Int> {
+        val (rotW, rotH) = computeRotatedDimensions(sourceWidth, sourceHeight, opticalSettings.rotationDegrees)
+        val maxAllowed = minOf(maxTexSize.coerceAtLeast(256), ResolutionPreset.MAX_FBO_EDGE_PX)
+
+        if (isPreComposited && opticalSettings.cropAspectRatio == null) {
+            val targetLong =
+                ((maxEdgeOverride ?: resolutionPreset.maxLongEdgePx).coerceIn(64, maxAllowed) / 2) * 2
+            val srcLong = maxOf(rotW, rotH).coerceAtLeast(1)
+            val srcShort = minOf(rotW, rotH).coerceAtLeast(1)
+            val rawShort = (targetLong.toDouble() * srcShort / srcLong).roundToInt()
+            val targetShort = ((rawShort / 2) * 2).coerceIn(2, targetLong)
+            return if (rotH > rotW) {
+                targetShort to targetLong
+            } else {
+                targetLong to targetShort
+            }
+        }
+
+        val aspect = opticalSettings.cropAspectRatio ?: opticalSettings.aspectRatio
+        val (longEdge, shortEdge) =
+            if (maxEdgeOverride != null) {
+                val safeLong = ((maxEdgeOverride.coerceIn(64, maxAllowed) / 2) * 2).coerceAtLeast(2)
+                val rawShort = (safeLong.toDouble() * aspect.heightRatio / aspect.widthRatio).roundToInt()
+                val safeShort = ((rawShort / 2) * 2).coerceIn(2, safeLong)
+                safeLong to safeShort
+            } else {
+                resolutionPreset.computeTargetDimensions(aspect, maxTexSize)
+            }
+
+        val overridePortrait = opticalSettings.cropPortraitOverride
+        val effectivePortrait =
+            if (opticalSettings.cropAspectRatio != null && overridePortrait != null) {
+                overridePortrait
+            } else {
+                rotH > rotW
+            }
+        return if (effectivePortrait) {
+            shortEdge to longEdge
+        } else {
+            longEdge to shortEdge
+        }
+    }
+
+    /**
+     * Builds a column-major 4x4 texture matrix mapping bottom-up GL FBO UVs into top-down Android
+     * [android.graphics.Bitmap] texture UVs rotated clockwise by [rotationDegrees] (`0/90/180/270`).
+     */
+    fun computeBitmapTexMatrix(rotationDegrees: Int): FloatArray =
+        when (OpticalSettings.normalizeRotationDegrees(rotationDegrees)) {
+            90 ->
+                floatArrayOf(
+                    0f, -1f, 0f, 0f,
+                    -1f, 0f, 0f, 0f,
+                    0f, 0f, 1f, 0f,
+                    1f, 1f, 0f, 1f
+                )
+            180 ->
+                floatArrayOf(
+                    -1f, 0f, 0f, 0f,
+                    0f, 1f, 0f, 0f,
+                    0f, 0f, 1f, 0f,
+                    1f, 0f, 0f, 1f
+                )
+            270 ->
+                floatArrayOf(
+                    0f, 1f, 0f, 0f,
+                    1f, 0f, 0f, 0f,
+                    0f, 0f, 1f, 0f,
+                    0f, 0f, 0f, 1f
+                )
+            else ->
+                floatArrayOf(
+                    1f, 0f, 0f, 0f,
+                    0f, -1f, 0f, 0f,
+                    0f, 0f, 1f, 0f,
+                    0f, 1f, 0f, 1f
+                )
+        }
+
+    /**
+     * Combines an OES [SurfaceTexture] column-major 4x4 [stMatrix] with a clockwise
+     * [rotationDegrees] (`0/90/180/270`) transform in bottom-up UV space (`stMatrix * rotMat`).
+     */
+    fun computeOesTexMatrix(stMatrix: FloatArray, rotationDegrees: Int): FloatArray {
+        require(stMatrix.size == 16) { "Expected 16-element 4x4 matrix" }
+        val rot =
+            when (OpticalSettings.normalizeRotationDegrees(rotationDegrees)) {
+                90 ->
+                    floatArrayOf(
+                        0f, 1f, 0f, 0f,
+                        -1f, 0f, 0f, 0f,
+                        0f, 0f, 1f, 0f,
+                        1f, 0f, 0f, 1f
+                    )
+                180 ->
+                    floatArrayOf(
+                        -1f, 0f, 0f, 0f,
+                        0f, -1f, 0f, 0f,
+                        0f, 0f, 1f, 0f,
+                        1f, 1f, 0f, 1f
+                    )
+                270 ->
+                    floatArrayOf(
+                        0f, -1f, 0f, 0f,
+                        1f, 0f, 0f, 0f,
+                        0f, 0f, 1f, 0f,
+                        0f, 1f, 0f, 1f
+                    )
+                else -> return stMatrix.copyOf()
+            }
+        return mulMat4ColMajor(stMatrix, rot)
+    }
+
+    /**
+     * Transforms `(u, v)` by a column-major 4x4 matrix `(m * vec4(u, v, 0, 1)).xy`.
+     */
+    fun transformUv(colMajorMat4: FloatArray, u: Float, v: Float): Pair<Float, Float> {
+        require(colMajorMat4.size == 16) { "Expected 16-element 4x4 matrix" }
+        val outU = colMajorMat4[0] * u + colMajorMat4[4] * v + colMajorMat4[12]
+        val outV = colMajorMat4[1] * u + colMajorMat4[5] * v + colMajorMat4[13]
+        return outU to outV
     }
 
     /**
@@ -400,6 +567,21 @@ object GlMath {
                     a[r3] * b[col] +
                     a[r3 + 1] * b[3 + col] +
                     a[r3 + 2] * b[6 + col]
+            }
+        }
+        return out
+    }
+
+    private fun mulMat4ColMajor(a: FloatArray, b: FloatArray): FloatArray {
+        val out = FloatArray(16)
+        for (col in 0 until 4) {
+            val c4 = col * 4
+            for (row in 0 until 4) {
+                out[c4 + row] =
+                    a[row] * b[c4] +
+                    a[4 + row] * b[c4 + 1] +
+                    a[8 + row] * b[c4 + 2] +
+                    a[12 + row] * b[c4 + 3]
             }
         }
         return out
