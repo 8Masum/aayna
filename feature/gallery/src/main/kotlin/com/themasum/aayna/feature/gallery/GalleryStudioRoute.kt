@@ -1,6 +1,8 @@
 package com.themasum.aayna.feature.gallery
 
+import android.content.Intent
 import android.graphics.Bitmap
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -8,6 +10,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -20,10 +23,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
+import androidx.compose.material.icons.rounded.Checklist
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -36,6 +41,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,10 +59,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.themasum.aayna.core.gl.OffscreenGlExporter
+import com.themasum.aayna.core.gl.StudioGlPreviewRenderer
 import com.themasum.aayna.core.model.CameraCatalog
 import com.themasum.aayna.core.model.CaptureRecipe
 import com.themasum.aayna.core.model.DateStampFormatter
 import com.themasum.aayna.core.model.ExposureMath
+import com.themasum.aayna.core.model.FrameBorderStyle
+import com.themasum.aayna.core.model.MediaType
 import com.themasum.aayna.core.model.UserSettingsSnapshot
 import com.themasum.aayna.core.storage.AaynaLogger
 import com.themasum.aayna.core.storage.AaynaPreferencesRepository
@@ -64,8 +73,10 @@ import com.themasum.aayna.core.storage.AaynaSoundEngine
 import com.themasum.aayna.core.storage.FilmRollRepository
 import com.themasum.aayna.core.storage.MediaStoreExporter
 import com.themasum.aayna.core.storage.NegativeRepository
+import com.themasum.aayna.core.storage.ThumbnailMemoryCache
 import com.themasum.aayna.core.storage.db.FilmRollEntity
 import com.themasum.aayna.core.storage.db.NegativeEntity
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
@@ -74,10 +85,22 @@ import kotlinx.coroutines.withContext
 private const val TAG = "GalleryStudio"
 
 private data class StudioEditorSession(
-    val sourceBitmap: Bitmap,
+    val originalBitmap: Bitmap,
+    val workingBitmap: Bitmap,
     val recipe: CaptureRecipe,
-    val editingNegativeId: String?
+    val editingNegativeId: String?,
+    val editingThumbnailPath: String = "",
+    val selectedCropPreset: StudioCropPreset = StudioCropPreset.ORIGINAL,
+    val grainBoost: Float = 0f
 )
+
+private data class D3dSession(
+    val frames: List<Bitmap>,
+    val recipe: CaptureRecipe,
+    val editingNegativeId: String? = null
+)
+
+private data class BoothSession(val frames: List<Bitmap>, val recipe: CaptureRecipe)
 
 @Composable
 fun GalleryStudioRoute(
@@ -89,6 +112,56 @@ fun GalleryStudioRoute(
     mediaStoreExporter: MediaStoreExporter,
     soundEngine: AaynaSoundEngine,
     logger: AaynaLogger,
+    modifier: Modifier = Modifier,
+    studioGlRenderer: StudioGlPreviewRenderer? = null,
+    thumbnailCache: ThumbnailMemoryCache? = null,
+    ledFontFamily: FontFamily = FontFamily.Monospace,
+    dotMatrixFontFamily: FontFamily = FontFamily.Monospace,
+    vcrOsdFontFamily: FontFamily = FontFamily.Monospace,
+    pixelFontFamily: FontFamily = FontFamily.Monospace,
+    condensedFontFamily: FontFamily = FontFamily.Monospace
+) {
+    val fontSet =
+        remember(ledFontFamily, dotMatrixFontFamily, vcrOsdFontFamily, pixelFontFamily, condensedFontFamily) {
+            ProCcdFontSet(
+                led = ledFontFamily,
+                dotMatrix = dotMatrixFontFamily,
+                vcrOsd = vcrOsdFontFamily,
+                pixel = pixelFontFamily,
+                condensed = condensedFontFamily
+            )
+        }
+    val effectiveThumbnailCache = remember(thumbnailCache) { thumbnailCache ?: ThumbnailMemoryCache() }
+
+    CompositionLocalProvider(LocalProCcdFonts provides fontSet) {
+        GalleryStudioContent(
+            onBack = onBack,
+            offscreenExporter = offscreenExporter,
+            preferencesRepository = preferencesRepository,
+            negativeRepository = negativeRepository,
+            filmRollRepository = filmRollRepository,
+            mediaStoreExporter = mediaStoreExporter,
+            soundEngine = soundEngine,
+            logger = logger,
+            studioGlRenderer = studioGlRenderer,
+            thumbnailCache = effectiveThumbnailCache,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun GalleryStudioContent(
+    onBack: () -> Unit,
+    offscreenExporter: OffscreenGlExporter,
+    preferencesRepository: AaynaPreferencesRepository,
+    negativeRepository: NegativeRepository,
+    filmRollRepository: FilmRollRepository,
+    mediaStoreExporter: MediaStoreExporter,
+    soundEngine: AaynaSoundEngine,
+    logger: AaynaLogger,
+    studioGlRenderer: StudioGlPreviewRenderer?,
+    thumbnailCache: ThumbnailMemoryCache,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -102,14 +175,20 @@ fun GalleryStudioRoute(
     val activeCameraId by preferencesRepository.activeCameraIdFlow.collectAsStateWithLifecycle(
         initialValue = CameraCatalog.defaultCamera.id
     )
-    val negatives by negativeRepository.negativesFlow.collectAsStateWithLifecycle(
+    val favoriteCameraIds by preferencesRepository.favoriteCameraIdsFlow.collectAsStateWithLifecycle(
+        initialValue = emptySet()
+    )
+    val activeNegatives by negativeRepository.activeNegativesFlow.collectAsStateWithLifecycle(
+        initialValue = emptyList()
+    )
+    val trashedNegatives by negativeRepository.trashedNegativesFlow.collectAsStateWithLifecycle(
         initialValue = emptyList()
     )
     val allRolls by filmRollRepository.allRollsFlow.collectAsStateWithLifecycle(
         initialValue = emptyList()
     )
 
-    var selectedLabMode by remember { mutableStateOf(GalleryLabMode.NEGATIVES) }
+    var selectedTab by remember { mutableStateOf(GalleryFilterTab.ALL) }
     var selectedRoll by remember { mutableStateOf<FilmRollEntity?>(null) }
     val selectedRollFrames by remember(selectedRoll?.rollId) {
         val rollId = selectedRoll?.rollId
@@ -120,11 +199,29 @@ fun GalleryStudioRoute(
         }
     }.collectAsStateWithLifecycle(initialValue = emptyList())
 
-    var editorSession by remember { mutableStateOf<StudioEditorSession?>(null) }
-    var isLoadingSource by remember { mutableStateOf(false) }
-    var isExporting by remember { mutableStateOf(false) }
+    var isSelectionMode by remember { mutableStateOf(false) }
+    var selectedIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    val photoPickerLauncher =
+    var detailEntity by remember { mutableStateOf<NegativeEntity?>(null) }
+    var editorSession by remember { mutableStateOf<StudioEditorSession?>(null) }
+    var d3dSession by remember { mutableStateOf<D3dSession?>(null) }
+    var boothSession by remember { mutableStateOf<BoothSession?>(null) }
+    var pendingMultiShotFrames by remember { mutableStateOf<List<Bitmap>?>(null) }
+
+    var showImportDialog by remember { mutableStateOf(false) }
+    var isLoadingSource by remember { mutableStateOf(false) }
+    var isBusyExport by remember { mutableStateOf(false) }
+
+    val filteredNegatives =
+        remember(selectedTab, activeNegatives, trashedNegatives) {
+            GalleryFilterHelper.filterNegatives(
+                tab = selectedTab,
+                activeNegatives = activeNegatives,
+                trashedNegatives = trashedNegatives
+            )
+        }
+
+    val singlePhotoPicker =
         rememberLauncherForActivityResult(
             contract = ActivityResultContracts.PickVisualMedia()
         ) { uri ->
@@ -142,29 +239,96 @@ fun GalleryStudioRoute(
                             settings = settings
                         )
                     StudioEditorSession(
-                        sourceBitmap = bitmap,
+                        originalBitmap = bitmap,
+                        workingBitmap = bitmap,
                         recipe = initialRecipe,
                         editingNegativeId = null
                     )
                 }.onSuccess { session ->
                     editorSession = session
-                    logger.logInfo(TAG, "Opened photo picker import in studio editor")
+                    logger.logInfo(TAG, "Opened single photo import in studio editor")
                 }.onFailure { err ->
-                    logger.logError(TAG, "Photo picker import failed", err)
+                    logger.logError(TAG, "Single photo import failed", err)
                     snackbarHostState.showSnackbar("Failed to import photo: ${err.message ?: "Unknown error"}")
                 }
                 isLoadingSource = false
             }
         }
 
-    fun launchPhotoPicker() {
+    val multiPhotoPicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.PickMultipleVisualMedia(maxItems = 4)
+        ) { uris ->
+            if (uris.isEmpty()) return@rememberLauncherForActivityResult
+            if (uris.size == 1) {
+                scope.launch {
+                    isLoadingSource = true
+                    runCatching {
+                        val bitmap =
+                            withContext(Dispatchers.IO) {
+                                GalleryImageDecoder.decodeUriSafely(context.contentResolver, uris.first())
+                            } ?: error("Unable to decode selected image")
+                        val initialRecipe =
+                            GalleryRecipeReducer.createImportedRecipe(
+                                cameraId = activeCameraId,
+                                settings = settings
+                            )
+                        StudioEditorSession(
+                            originalBitmap = bitmap,
+                            workingBitmap = bitmap,
+                            recipe = initialRecipe,
+                            editingNegativeId = null
+                        )
+                    }.onSuccess { session ->
+                        editorSession = session
+                    }.onFailure { err ->
+                        snackbarHostState.showSnackbar("Failed to import photo: ${err.message ?: "Error"}")
+                    }
+                    isLoadingSource = false
+                }
+                return@rememberLauncherForActivityResult
+            }
+
+            scope.launch {
+                isLoadingSource = true
+                runCatching {
+                    withContext(Dispatchers.IO) {
+                        uris.take(4).mapNotNull { uri ->
+                            GalleryImageDecoder.decodeUriSafely(context.contentResolver, uri, maxEdgePx = 1280)
+                        }
+                    }
+                }.onSuccess { frames ->
+                    if (frames.size >= 2) {
+                        pendingMultiShotFrames = frames
+                        logger.logInfo(TAG, "Imported ${frames.size} shots for Booth/D3D assembly")
+                    } else {
+                        snackbarHostState.showSnackbar("Select at least 2 valid photos for Booth or D3D")
+                    }
+                }.onFailure { err ->
+                    logger.logError(TAG, "Multi-photo import failed", err)
+                    snackbarHostState.showSnackbar("Failed to import multi-shot images")
+                }
+                isLoadingSource = false
+            }
+        }
+
+    fun openSinglePicker() {
+        showImportDialog = false
         soundEngine.playDialTick(settings.sfxEnabled)
-        photoPickerLauncher.launch(
+        singlePhotoPicker.launch(
             PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
         )
     }
 
-    fun openNegativeInEditor(entity: NegativeEntity) {
+    fun openMultiPicker() {
+        showImportDialog = false
+        soundEngine.playDialTick(settings.sfxEnabled)
+        multiPhotoPicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+        )
+    }
+
+    fun openNegativeInStudio(entity: NegativeEntity) {
         scope.launch {
             isLoadingSource = true
             runCatching {
@@ -174,12 +338,15 @@ fun GalleryStudioRoute(
                     } ?: error("Negative file missing on disk")
                 val recipe = entity.toCaptureRecipe()
                 StudioEditorSession(
-                    sourceBitmap = bitmap,
+                    originalBitmap = bitmap,
+                    workingBitmap = bitmap,
                     recipe = recipe,
-                    editingNegativeId = entity.recipeId
+                    editingNegativeId = entity.recipeId,
+                    editingThumbnailPath = entity.thumbnailPath
                 )
             }.onSuccess { session ->
                 soundEngine.playDialTick(settings.sfxEnabled)
+                detailEntity = null
                 editorSession = session
             }.onFailure { err ->
                 logger.logError(TAG, "Failed to open negative ${entity.recipeId}", err)
@@ -189,16 +356,161 @@ fun GalleryStudioRoute(
         }
     }
 
+    fun openNegativeFromGrid(entity: NegativeEntity) {
+        soundEngine.playDialTick(settings.sfxEnabled)
+        when (entity.resolvedMediaType()) {
+            MediaType.D3D_BURST -> {
+                scope.launch {
+                    isLoadingSource = true
+                    runCatching {
+                        val frames =
+                            GalleryImageDecoder.loadD3dFrames(
+                                filesDir = context.filesDir,
+                                recipeId = entity.recipeId,
+                                cleanImagePath = entity.cleanImagePath
+                            )
+                        if (frames.isEmpty()) error("No D3D burst frames found")
+                        D3dSession(
+                            frames = frames,
+                            recipe = entity.toCaptureRecipe(),
+                            editingNegativeId = entity.recipeId
+                        )
+                    }.onSuccess { session ->
+                        d3dSession = session
+                    }.onFailure { err ->
+                        logger.logError(TAG, "Failed to open D3D ${entity.recipeId}", err)
+                        snackbarHostState.showSnackbar("Unable to load D3D burst frames")
+                    }
+                    isLoadingSource = false
+                }
+            }
+            MediaType.VIDEO,
+            MediaType.STILL -> detailEntity = entity
+        }
+    }
+
+    suspend fun exportSingleStillEntity(entity: NegativeEntity): Boolean {
+        val bitmap =
+            withContext(Dispatchers.IO) {
+                GalleryImageDecoder.decodeFileSafely(entity.cleanImagePath)
+            } ?: return false
+        val recipe = entity.toCaptureRecipe()
+        val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+        val stampText =
+            DateStampFormatter.format(
+                epochMillis = recipe.capturedAtEpochMs,
+                format = recipe.stampConfig.format,
+                useEraYearOffset = recipe.stampConfig.useEraYearOffset,
+                eraYear = profile.eraYearOffset,
+                customText = recipe.stampConfig.customText
+            )
+        val gains =
+            ExposureMath.computeShaderFallbackGains(
+                hasManualSensor = false,
+                ev = recipe.opticalSettings.evCompensation,
+                iso = recipe.opticalSettings.iso,
+                shutterNs = recipe.opticalSettings.shutterSpeedNs
+            )
+        val rendered =
+            try {
+                offscreenExporter.renderBitmap(
+                    sourceBitmap = bitmap,
+                    profile = profile,
+                    recipe = recipe,
+                    stampText = stampText,
+                    fallbackGains = gains
+                )
+            } finally {
+                bitmap.recycle()
+            }
+        val uri =
+            try {
+                mediaStoreExporter.saveJpegToGallery(
+                    bitmap = rendered,
+                    profile = profile,
+                    recipe = recipe,
+                    jpegQuality = settings.clampedJpegQuality()
+                )
+            } finally {
+                rendered.recycle()
+            }
+        if (uri != null) {
+            negativeRepository.updateExportedUri(entity.recipeId, uri.toString())
+            return true
+        }
+        return false
+    }
+
+    suspend fun exportSingleD3dEntity(entity: NegativeEntity): Boolean {
+        val frames =
+            GalleryImageDecoder.loadD3dFrames(
+                filesDir = context.filesDir,
+                recipeId = entity.recipeId,
+                cleanImagePath = entity.cleanImagePath,
+                maxEdgePx = 720
+            )
+        if (frames.isEmpty()) return false
+        val recipe = entity.toCaptureRecipe()
+        val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+        val stampText =
+            DateStampFormatter.format(
+                epochMillis = recipe.capturedAtEpochMs,
+                format = recipe.stampConfig.format,
+                useEraYearOffset = recipe.stampConfig.useEraYearOffset,
+                eraYear = profile.eraYearOffset,
+                customText = recipe.stampConfig.customText
+            )
+        val gains =
+            ExposureMath.computeShaderFallbackGains(
+                hasManualSensor = false,
+                ev = recipe.opticalSettings.evCompensation,
+                iso = recipe.opticalSettings.iso,
+                shutterNs = recipe.opticalSettings.shutterSpeedNs
+            )
+        val graded =
+            try {
+                frames.map { frame ->
+                    offscreenExporter.renderBitmap(
+                        sourceBitmap = frame,
+                        profile = profile,
+                        recipe = recipe,
+                        stampText = stampText,
+                        fallbackGains = gains,
+                        maxEdgeOverride = 720
+                    )
+                }
+            } finally {
+                frames.forEach { it.recycle() }
+            }
+        val uri =
+            try {
+                mediaStoreExporter.saveD3dGifToGallery(
+                    frames = graded,
+                    profile = profile,
+                    recipe = recipe,
+                    frameDelayMs = GalleryD3dTimingMath.DEFAULT_FRAME_DELAY_MS,
+                    pingPong = true
+                )
+            } finally {
+                graded.forEach { it.recycle() }
+            }
+        if (uri != null) {
+            negativeRepository.updateExportedUri(entity.recipeId, uri.toString())
+            return true
+        }
+        return false
+    }
+
     Scaffold(
-        modifier = modifier.fillMaxSize().background(ProCcdPalette.BgCharcoal).systemBarsPadding(),
-        containerColor = ProCcdPalette.BgCharcoal,
+        modifier = modifier.fillMaxSize().background(ProCcdPalette.VoidObsidian).systemBarsPadding(),
+        containerColor = ProCcdPalette.VoidObsidian,
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState) { data ->
                 Snackbar(
                     snackbarData = data,
                     containerColor = ProCcdPalette.SurfaceElevated,
-                    contentColor = ProCcdPalette.TextPrimary,
-                    actionColor = ProCcdPalette.LedAmber
+                    contentColor = ProCcdPalette.CreamInk,
+                    actionColor = ProCcdPalette.WarmAmber
                 )
             }
         }
@@ -209,184 +521,706 @@ fun GalleryStudioRoute(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            val currentSession = editorSession
-            if (currentSession != null) {
-                GalleryStudioEditor(
-                    sourceBitmap = currentSession.sourceBitmap,
-                    recipe = currentSession.recipe,
-                    isSavedNegative = currentSession.editingNegativeId != null,
-                    isExporting = isExporting,
-                    hapticsEnabled = settings.hapticsEnabled,
-                    offscreenExporter = offscreenExporter,
-                    onRecipeChange = { updated ->
-                        editorSession = currentSession.copy(recipe = updated)
-                    },
-                    onDialTick = { soundEngine.playDialTick(settings.sfxEnabled) },
-                    onUpdateNegative = {
-                        val negativeId = currentSession.editingNegativeId ?: return@GalleryStudioEditor
-                        scope.launch {
-                            runCatching {
-                                negativeRepository.updateRecipe(currentSession.recipe)
-                            }.onSuccess {
-                                soundEngine.playFilmWind(settings.sfxEnabled)
-                                if (settings.hapticsEnabled) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                                logger.logInfo(TAG, "Updated negative recipe $negativeId")
-                                snackbarHostState.showSnackbar("Negative recipe updated")
-                            }.onFailure { err ->
-                                logger.logError(TAG, "Failed to update negative $negativeId", err)
-                                snackbarHostState.showSnackbar("Failed to update negative")
-                            }
-                        }
-                    },
-                    onExportToGallery = {
-                        if (isExporting) return@GalleryStudioEditor
-                        scope.launch {
-                            isExporting = true
-                            val recipe = currentSession.recipe
-                            val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
-                            val stampText =
-                                DateStampFormatter.format(
-                                    epochMillis = recipe.capturedAtEpochMs,
-                                    format = recipe.stampConfig.format,
-                                    useEraYearOffset = recipe.stampConfig.useEraYearOffset,
-                                    eraYear = profile.eraYearOffset,
-                                    customText = recipe.stampConfig.customText
-                                )
-                            val fallbackGains =
-                                ExposureMath.computeShaderFallbackGains(
-                                    hasManualSensor = false,
-                                    ev = recipe.opticalSettings.evCompensation,
-                                    iso = recipe.opticalSettings.iso,
-                                    shutterNs = recipe.opticalSettings.shutterSpeedNs
-                                )
-                            runCatching {
-                                val fullBitmap =
-                                    offscreenExporter.renderBitmap(
-                                        sourceBitmap = currentSession.sourceBitmap,
-                                        profile = profile,
-                                        recipe = recipe,
-                                        stampText = stampText,
-                                        fallbackGains = fallbackGains,
-                                        maxEdgeOverride = null,
-                                        splitCompareRatio = 0f,
-                                        isHoldOriginal = false
+            val currentEditor = editorSession
+            val currentD3d = d3dSession
+            val currentBooth = boothSession
+            val currentDetail = detailEntity
+
+            when {
+                currentEditor != null -> {
+                    GalleryStudioEditor(
+                        sourceBitmap = currentEditor.workingBitmap,
+                        recipe = currentEditor.recipe,
+                        isSavedNegative = currentEditor.editingNegativeId != null,
+                        isExporting = isBusyExport,
+                        hapticsEnabled = settings.hapticsEnabled,
+                        offscreenExporter = offscreenExporter,
+                        studioGlRenderer = studioGlRenderer,
+                        favoriteCameraIds = favoriteCameraIds,
+                        selectedCropPreset = currentEditor.selectedCropPreset,
+                        grainBoost = currentEditor.grainBoost,
+                        onGrainBoostChange = { boost ->
+                            editorSession = currentEditor.copy(grainBoost = boost.coerceIn(0f, 1f))
+                        },
+                        onSelectCropPreset = { preset ->
+                            val nextRecipe = GalleryRecipeReducer.updateCropPreset(currentEditor.recipe, preset)
+                            val nextWorking =
+                                if (preset.exactRatio == null) {
+                                    currentEditor.originalBitmap
+                                } else {
+                                    GalleryImageDecoder.cropBitmapToAspect(
+                                        currentEditor.originalBitmap,
+                                        preset.exactRatio
                                     )
-                                val exportedUri =
-                                    try {
-                                        mediaStoreExporter.saveJpegToGallery(
-                                            bitmap = fullBitmap,
+                                }
+                            editorSession =
+                                currentEditor.copy(
+                                    workingBitmap = nextWorking,
+                                    recipe = nextRecipe,
+                                    selectedCropPreset = preset
+                                )
+                        },
+                        onRotate90Cw = {
+                            val rotatedOriginal = GalleryImageDecoder.rotateBitmap90Cw(currentEditor.originalBitmap)
+                            val nextWorking =
+                                currentEditor.selectedCropPreset.exactRatio?.let { ratio ->
+                                    GalleryImageDecoder.cropBitmapToAspect(rotatedOriginal, ratio)
+                                } ?: rotatedOriginal
+                            editorSession =
+                                currentEditor.copy(
+                                    originalBitmap = rotatedOriginal,
+                                    workingBitmap = nextWorking
+                                )
+                        },
+                        onToggleFavoriteCamera = { camId ->
+                            scope.launch { preferencesRepository.toggleFavoriteCamera(camId) }
+                        },
+                        onRecipeChange = { updated ->
+                            editorSession = currentEditor.copy(recipe = updated)
+                        },
+                        onDialTick = { soundEngine.playDialTick(settings.sfxEnabled) },
+                        onSaveEdits = {
+                            if (isBusyExport) return@GalleryStudioEditor
+                            scope.launch {
+                                isBusyExport = true
+                                val recipe = currentEditor.recipe
+                                val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+                                val stampText =
+                                    DateStampFormatter.format(
+                                        epochMillis = recipe.capturedAtEpochMs,
+                                        format = recipe.stampConfig.format,
+                                        useEraYearOffset = recipe.stampConfig.useEraYearOffset,
+                                        eraYear = profile.eraYearOffset,
+                                        customText = recipe.stampConfig.customText
+                                    )
+                                val params =
+                                    GalleryRecipeReducer.buildGlRenderParams(
+                                        recipe = recipe,
+                                        profile = profile,
+                                        stampText = stampText,
+                                        grainBoost = currentEditor.grainBoost
+                                    )
+                                runCatching {
+                                    val fullGraded =
+                                        offscreenExporter.renderBitmap(
+                                            sourceBitmap = currentEditor.workingBitmap,
                                             profile = profile,
-                                            recipe = recipe
+                                            recipe = recipe,
+                                            stampText = stampText,
+                                            fallbackGains = params.fallbackGains
                                         )
-                                    } finally {
-                                        fullBitmap.recycle()
+                                    val gradedThumbnail =
+                                        try {
+                                            GalleryImageDecoder.createScaledThumbnail(fullGraded)
+                                        } finally {
+                                            fullGraded.recycle()
+                                        }
+                                    val negId = currentEditor.editingNegativeId
+                                    if (negId != null) {
+                                        if (currentEditor.editingThumbnailPath.isNotBlank()) {
+                                            thumbnailCache.invalidatePath(currentEditor.editingThumbnailPath)
+                                        }
+                                        val updatedThumbPath =
+                                            negativeRepository.updateRecipeAndThumbnail(
+                                                recipe = recipe,
+                                                gradedThumbnailBitmap = gradedThumbnail
+                                            )
+                                        editorSession =
+                                            currentEditor.copy(editingThumbnailPath = updatedThumbPath)
+                                    } else {
+                                        val saved =
+                                            negativeRepository.saveNegative(
+                                                cleanBitmap = currentEditor.originalBitmap,
+                                                thumbnailBitmap = gradedThumbnail,
+                                                recipe = recipe
+                                            )
+                                        editorSession =
+                                            currentEditor.copy(
+                                                editingNegativeId = saved.recipeId,
+                                                editingThumbnailPath = saved.thumbnailPath
+                                            )
                                     }
-                                val negId = currentSession.editingNegativeId
-                                if (negId != null && exportedUri != null) {
-                                    negativeRepository.updateRecipe(recipe)
-                                    negativeRepository.updateExportedUri(negId, exportedUri.toString())
+                                }.onSuccess {
+                                    soundEngine.playFilmWind(settings.sfxEnabled)
+                                    if (settings.hapticsEnabled) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                    logger.logInfo(TAG, "Saved studio edits & graded thumbnail for ${recipe.recipeId}")
+                                    snackbarHostState.showSnackbar("Edits saved to Works")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "Save edits failed", err)
+                                    snackbarHostState.showSnackbar("Failed to save edits: ${err.message ?: "Error"}")
                                 }
-                                exportedUri
-                            }.onSuccess { exportedUri ->
-                                soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
-                                if (settings.hapticsEnabled) {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }
-                                logger.logInfo(TAG, "Exported studio image to gallery: $exportedUri")
-                                snackbarHostState.showSnackbar("Exported to Pictures/Aayna")
-                            }.onFailure { err ->
-                                logger.logError(TAG, "Gallery export failed", err)
-                                snackbarHostState.showSnackbar("Export failed: ${err.message ?: "Unknown error"}")
-                            }
-                            isExporting = false
-                        }
-                    },
-                    onCloseEditor = {
-                        editorSession = null
-                    }
-                )
-            } else {
-                Column(modifier = Modifier.fillMaxSize()) {
-                    StudioTopHeader(
-                        selectedMode = selectedLabMode,
-                        onBack = onBack,
-                        onSelectMode = { mode ->
-                            soundEngine.playDialTick(settings.sfxEnabled)
-                            selectedLabMode = mode
-                            if (mode != GalleryLabMode.FILM_ROLLS) {
-                                selectedRoll = null
+                                isBusyExport = false
                             }
                         },
-                        onImportPhotoClick = ::launchPhotoPicker
+                        onExportToGallery = {
+                            if (isBusyExport) return@GalleryStudioEditor
+                            scope.launch {
+                                isBusyExport = true
+                                val recipe = currentEditor.recipe
+                                val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+                                val stampText =
+                                    DateStampFormatter.format(
+                                        epochMillis = recipe.capturedAtEpochMs,
+                                        format = recipe.stampConfig.format,
+                                        useEraYearOffset = recipe.stampConfig.useEraYearOffset,
+                                        eraYear = profile.eraYearOffset,
+                                        customText = recipe.stampConfig.customText
+                                    )
+                                val params =
+                                    GalleryRecipeReducer.buildGlRenderParams(
+                                        recipe = recipe,
+                                        profile = profile,
+                                        stampText = stampText,
+                                        grainBoost = currentEditor.grainBoost
+                                    )
+                                runCatching {
+                                    val fullBitmap =
+                                        offscreenExporter.renderBitmap(
+                                            sourceBitmap = currentEditor.workingBitmap,
+                                            profile = profile,
+                                            recipe = recipe,
+                                            stampText = stampText,
+                                            fallbackGains = params.fallbackGains
+                                        )
+                                    val exportedUri =
+                                        try {
+                                            mediaStoreExporter.saveJpegToGallery(
+                                                bitmap = fullBitmap,
+                                                profile = profile,
+                                                recipe = recipe,
+                                                jpegQuality = settings.clampedJpegQuality()
+                                            )
+                                        } finally {
+                                            fullBitmap.recycle()
+                                        }
+                                    val negId = currentEditor.editingNegativeId
+                                    if (negId != null && exportedUri != null) {
+                                        negativeRepository.updateRecipe(recipe)
+                                        negativeRepository.updateExportedUri(negId, exportedUri.toString())
+                                    }
+                                    exportedUri
+                                }.onSuccess { exportedUri ->
+                                    soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
+                                    if (settings.hapticsEnabled) {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    }
+                                    logger.logInfo(TAG, "Exported studio image to gallery: $exportedUri")
+                                    snackbarHostState.showSnackbar("Exported to Pictures/Aayna")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "Gallery export failed", err)
+                                    snackbarHostState.showSnackbar("Export failed: ${err.message ?: "Unknown error"}")
+                                }
+                                isBusyExport = false
+                            }
+                        },
+                        onCloseEditor = { editorSession = null }
                     )
+                }
 
-                    when (selectedLabMode) {
-                        GalleryLabMode.NEGATIVES ->
-                            NegativesLabGrid(
-                                negatives = negatives,
-                                onOpenNegative = ::openNegativeInEditor,
-                                onDeleteNegative = { entity ->
-                                    scope.launch {
-                                        runCatching {
-                                            negativeRepository.deleteNegative(entity.recipeId)
-                                        }.onSuccess {
-                                            soundEngine.playDialTick(settings.sfxEnabled)
-                                            snackbarHostState.showSnackbar("Negative deleted")
-                                        }.onFailure { err ->
-                                            logger.logError(TAG, "Delete negative failed", err)
-                                            snackbarHostState.showSnackbar("Failed to delete negative")
-                                        }
+                currentD3d != null -> {
+                    D3dWigglegramStudioScreen(
+                        sourceFrames = currentD3d.frames,
+                        recipe = currentD3d.recipe,
+                        isSavedNegative = currentD3d.editingNegativeId != null,
+                        isBusy = isBusyExport,
+                        offscreenExporter = offscreenExporter,
+                        onRecipeChange = { updated -> d3dSession = currentD3d.copy(recipe = updated) },
+                        onSaveToWorks = { activeFrames ->
+                            if (isBusyExport || activeFrames.isEmpty()) return@D3dWigglegramStudioScreen
+                            scope.launch {
+                                isBusyExport = true
+                                runCatching {
+                                    val recipe =
+                                        currentD3d.recipe.copy(
+                                            mediaType = MediaType.D3D_BURST,
+                                            burstFrameCount = currentD3d.frames.size
+                                        )
+                                    val thumb = GalleryImageDecoder.createScaledThumbnail(activeFrames.first())
+                                    GalleryImageDecoder.saveD3dFramesToDir(
+                                        filesDir = context.filesDir,
+                                        recipeId = recipe.recipeId,
+                                        frames = currentD3d.frames
+                                    )
+                                    val saved =
+                                        negativeRepository.saveNegative(
+                                            cleanBitmap = currentD3d.frames.first(),
+                                            thumbnailBitmap = thumb,
+                                            recipe = recipe
+                                        )
+                                    d3dSession = currentD3d.copy(editingNegativeId = saved.recipeId, recipe = recipe)
+                                }.onSuccess {
+                                    soundEngine.playFilmWind(settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("D3D Wigglegram saved to Works")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "Save D3D failed", err)
+                                    snackbarHostState.showSnackbar("Failed to save D3D")
+                                }
+                                isBusyExport = false
+                            }
+                        },
+                        onExportLoopingGif = { activeFrames, delayMs, pingPong ->
+                            if (isBusyExport || activeFrames.isEmpty()) return@D3dWigglegramStudioScreen
+                            scope.launch {
+                                isBusyExport = true
+                                val recipe = currentD3d.recipe
+                                val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+                                runCatching {
+                                    mediaStoreExporter.saveD3dGifToGallery(
+                                        frames = activeFrames,
+                                        profile = profile,
+                                        recipe = recipe,
+                                        frameDelayMs = GalleryD3dTimingMath.clampFrameDelayMs(delayMs),
+                                        pingPong = pingPong
+                                    )
+                                }.onSuccess { uri ->
+                                    val negId = currentD3d.editingNegativeId
+                                    if (negId != null && uri != null) {
+                                        negativeRepository.updateExportedUri(negId, uri.toString())
                                     }
-                                },
-                                onImportPhotoClick = ::launchPhotoPicker,
-                                modifier = Modifier.weight(1f)
-                            )
-                        GalleryLabMode.FILM_ROLLS ->
-                            FilmRollsView(
-                                rolls = allRolls,
-                                selectedRoll = selectedRoll,
-                                selectedRollFrames = selectedRollFrames,
-                                onSelectRoll = { roll ->
+                                    soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Looping GIF exported to Pictures/Aayna")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "GIF export failed", err)
+                                    snackbarHostState.showSnackbar("GIF export failed: ${err.message ?: "Error"}")
+                                }
+                                isBusyExport = false
+                            }
+                        },
+                        onBack = { d3dSession = null }
+                    )
+                }
+
+                currentBooth != null -> {
+                    PhotoBoothStudioScreen(
+                        sourceFrames = currentBooth.frames,
+                        recipe = currentBooth.recipe,
+                        isBusy = isBusyExport,
+                        offscreenExporter = offscreenExporter,
+                        onRecipeChange = { updated -> boothSession = currentBooth.copy(recipe = updated) },
+                        onSwitchToD3d = {
+                            val d3dRecipe =
+                                currentBooth.recipe.copy(
+                                    mediaType = MediaType.D3D_BURST,
+                                    burstFrameCount = currentBooth.frames.size,
+                                    opticalSettings =
+                                    currentBooth.recipe.opticalSettings.copy(
+                                        frameStyle = FrameBorderStyle.NONE
+                                    )
+                                )
+                            boothSession = null
+                            d3dSession = D3dSession(frames = currentBooth.frames, recipe = d3dRecipe)
+                        },
+                        onSaveStripToWorks = { strip ->
+                            if (isBusyExport) return@PhotoBoothStudioScreen
+                            scope.launch {
+                                isBusyExport = true
+                                runCatching {
+                                    val recipe =
+                                        currentBooth.recipe.copy(
+                                            opticalSettings =
+                                            currentBooth.recipe.opticalSettings.copy(
+                                                frameStyle = FrameBorderStyle.PHOTO_BOOTH_4STRIP
+                                            )
+                                        )
+                                    val thumb = GalleryImageDecoder.createScaledThumbnail(strip)
+                                    negativeRepository.saveNegative(
+                                        cleanBitmap = strip,
+                                        thumbnailBitmap = thumb,
+                                        recipe = recipe
+                                    )
+                                }.onSuccess {
+                                    soundEngine.playFilmWind(settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Photo Booth 4-Strip saved to Works")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "Save Booth failed", err)
+                                    snackbarHostState.showSnackbar("Failed to save strip")
+                                }
+                                isBusyExport = false
+                            }
+                        },
+                        onExportStripJpeg = { strip ->
+                            if (isBusyExport) return@PhotoBoothStudioScreen
+                            scope.launch {
+                                isBusyExport = true
+                                val recipe = currentBooth.recipe
+                                val profile = CameraCatalog.findByIdOrDefault(recipe.cameraId)
+                                runCatching {
+                                    mediaStoreExporter.saveJpegToGallery(
+                                        bitmap = strip,
+                                        profile = profile,
+                                        recipe = recipe,
+                                        suffix = "booth",
+                                        jpegQuality = settings.clampedJpegQuality()
+                                    )
+                                }.onSuccess {
+                                    soundEngine.playShutter(profile.soundAssetName, settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Booth 4-Strip exported to Pictures/Aayna")
+                                }.onFailure { err ->
+                                    logger.logError(TAG, "Booth export failed", err)
+                                    snackbarHostState.showSnackbar("Booth export failed")
+                                }
+                                isBusyExport = false
+                            }
+                        },
+                        onBack = { boothSession = null }
+                    )
+                }
+
+                currentDetail != null -> {
+                    if (currentDetail.resolvedMediaType() == MediaType.VIDEO) {
+                        VideoDetailScreen(
+                            entity = currentDetail,
+                            thumbnailCache = thumbnailCache,
+                            onBack = { detailEntity = null },
+                            onPlayOffline = {
+                                val uriStr = currentDetail.mediaUri ?: currentDetail.exportedUri
+                                if (uriStr.isNullOrBlank()) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("No MediaStore URI recorded for clip")
+                                    }
+                                    return@VideoDetailScreen
+                                }
+                                runCatching {
+                                    val intent =
+                                        Intent(Intent.ACTION_VIEW).apply {
+                                            setDataAndType(Uri.parse(uriStr), "video/mp4")
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                    context.startActivity(intent)
+                                }.onFailure {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("No offline video player found")
+                                    }
+                                }
+                            },
+                            onShareOffline = {
+                                val uriStr = currentDetail.mediaUri ?: currentDetail.exportedUri
+                                if (uriStr.isNullOrBlank()) {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("No MediaStore URI recorded for clip")
+                                    }
+                                    return@VideoDetailScreen
+                                }
+                                runCatching {
+                                    val shareIntent =
+                                        Intent(Intent.ACTION_SEND).apply {
+                                            type = "video/mp4"
+                                            putExtra(Intent.EXTRA_STREAM, Uri.parse(uriStr))
+                                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share Aayna Video"))
+                                }.onFailure {
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar("Unable to share video")
+                                    }
+                                }
+                            },
+                            onSaveCaption = { newCaption ->
+                                scope.launch {
+                                    val updated =
+                                        GalleryRecipeReducer.updateCaption(
+                                            currentDetail.toCaptureRecipe(),
+                                            newCaption
+                                        )
+                                    negativeRepository.updateRecipe(updated)
+                                    detailEntity = currentDetail.copy(caption = updated.caption)
                                     soundEngine.playDialTick(settings.sfxEnabled)
-                                    selectedRoll = roll
-                                },
-                                onLoadNewRoll = {
-                                    scope.launch {
-                                        runCatching {
-                                            filmRollRepository.loadNewRoll(
-                                                cameraId = activeCameraId,
-                                                capacity = settings.rollCapacity
-                                            )
-                                        }.onSuccess {
-                                            soundEngine.playFilmWind(settings.sfxEnabled)
-                                            if (settings.hapticsEnabled) {
-                                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    snackbarHostState.showSnackbar("Caption saved")
+                                }
+                            },
+                            onSoftDelete = {
+                                scope.launch {
+                                    negativeRepository.softDelete(currentDetail.recipeId)
+                                    detailEntity = null
+                                    soundEngine.playDialTick(settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Moved to Trash")
+                                }
+                            }
+                        )
+                    } else {
+                        PhotoDetailScreen(
+                            entity = currentDetail,
+                            offscreenExporter = offscreenExporter,
+                            onBack = { detailEntity = null },
+                            onOpenInStudio = { openNegativeInStudio(currentDetail) },
+                            onSaveCaption = { newCaption ->
+                                scope.launch {
+                                    val updated =
+                                        GalleryRecipeReducer.updateCaption(
+                                            currentDetail.toCaptureRecipe(),
+                                            newCaption
+                                        )
+                                    negativeRepository.updateRecipe(updated)
+                                    detailEntity = currentDetail.copy(caption = updated.caption)
+                                    soundEngine.playDialTick(settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Caption saved")
+                                }
+                            },
+                            onExportJpeg = {
+                                if (isBusyExport) return@PhotoDetailScreen
+                                scope.launch {
+                                    isBusyExport = true
+                                    runCatching { exportSingleStillEntity(currentDetail) }
+                                        .onSuccess { ok ->
+                                            if (ok) {
+                                                soundEngine.playShutter(
+                                                    CameraCatalog.findByIdOrDefault(
+                                                        currentDetail.cameraId
+                                                    ).soundAssetName,
+                                                    settings.sfxEnabled
+                                                )
+                                                snackbarHostState.showSnackbar("Exported to Pictures/Aayna")
+                                            } else {
+                                                snackbarHostState.showSnackbar("Export failed")
                                             }
-                                            snackbarHostState.showSnackbar(
-                                                "Loaded fresh ${settings.rollCapacity}-exp roll"
-                                            )
-                                        }.onFailure { err ->
-                                            logger.logError(TAG, "Load new roll failed", err)
-                                            snackbarHostState.showSnackbar("Failed to load new roll")
                                         }
-                                    }
-                                },
-                                onOpenFrame = ::openNegativeInEditor,
-                                onDeleteFrame = { entity ->
-                                    scope.launch {
-                                        runCatching {
-                                            negativeRepository.deleteNegative(entity.recipeId)
-                                        }.onSuccess {
+                                        .onFailure { err ->
+                                            logger.logError(TAG, "Detail export failed", err)
+                                            snackbarHostState.showSnackbar("Export failed")
+                                        }
+                                    isBusyExport = false
+                                }
+                            },
+                            onSoftDelete = {
+                                scope.launch {
+                                    negativeRepository.softDelete(currentDetail.recipeId)
+                                    detailEntity = null
+                                    soundEngine.playDialTick(settings.sfxEnabled)
+                                    snackbarHostState.showSnackbar("Moved to Trash")
+                                }
+                            },
+                            isBusy = isBusyExport
+                        )
+                    }
+                }
+
+                else -> {
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        WorksTopHeader(
+                            selectedTab = selectedTab,
+                            isSelectionMode = isSelectionMode,
+                            onBack = onBack,
+                            onToggleSelectMode = {
+                                isSelectionMode = !isSelectionMode
+                                if (!isSelectionMode) selectedIds = emptySet()
+                            },
+                            onSelectTab = { tab ->
+                                soundEngine.playDialTick(settings.sfxEnabled)
+                                selectedTab = tab
+                                isSelectionMode = false
+                                selectedIds = emptySet()
+                                if (tab != GalleryFilterTab.ROLLS) {
+                                    selectedRoll = null
+                                }
+                            },
+                            onImportPhotoClick = { showImportDialog = true }
+                        )
+
+                        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                            when (selectedTab) {
+                                GalleryFilterTab.ROLLS ->
+                                    FilmRollsView(
+                                        rolls = allRolls,
+                                        selectedRoll = selectedRoll,
+                                        selectedRollFrames = selectedRollFrames,
+                                        thumbnailCache = thumbnailCache,
+                                        isSelectionMode = isSelectionMode,
+                                        selectedIds = selectedIds,
+                                        onToggleSelect = { id ->
+                                            selectedIds =
+                                                if (selectedIds.contains(id)) {
+                                                    selectedIds - id
+                                                } else {
+                                                    selectedIds + id
+                                                }
+                                        },
+                                        onEnterSelection = { id ->
+                                            isSelectionMode = true
+                                            selectedIds = selectedIds + id
+                                        },
+                                        onSelectRoll = { roll ->
                                             soundEngine.playDialTick(settings.sfxEnabled)
-                                            snackbarHostState.showSnackbar("Frame deleted")
+                                            selectedRoll = roll
+                                            isSelectionMode = false
+                                            selectedIds = emptySet()
+                                        },
+                                        onLoadNewRoll = {
+                                            scope.launch {
+                                                runCatching {
+                                                    filmRollRepository.loadNewRoll(
+                                                        cameraId = activeCameraId,
+                                                        capacity = settings.rollCapacity
+                                                    )
+                                                }.onSuccess {
+                                                    soundEngine.playFilmWind(settings.sfxEnabled)
+                                                    if (settings.hapticsEnabled) {
+                                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    }
+                                                    snackbarHostState.showSnackbar(
+                                                        "Loaded fresh ${settings.rollCapacity}-exp roll"
+                                                    )
+                                                }.onFailure { err ->
+                                                    logger.logError(TAG, "Load new roll failed", err)
+                                                    snackbarHostState.showSnackbar("Failed to load new roll")
+                                                }
+                                            }
+                                        },
+                                        onOpenFrame = ::openNegativeFromGrid,
+                                        onSoftDeleteFrame = { entity ->
+                                            scope.launch {
+                                                negativeRepository.softDelete(entity.recipeId)
+                                                soundEngine.playDialTick(settings.sfxEnabled)
+                                                snackbarHostState.showSnackbar("Frame moved to Trash")
+                                            }
+                                        },
+                                        onImportPhotoClick = { showImportDialog = true },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+
+                                else ->
+                                    WorksGalleryGrid(
+                                        negatives = filteredNegatives,
+                                        activeTab = selectedTab,
+                                        thumbnailCache = thumbnailCache,
+                                        isSelectionMode = isSelectionMode,
+                                        selectedIds = selectedIds,
+                                        onToggleSelect = { id ->
+                                            selectedIds =
+                                                if (selectedIds.contains(id)) {
+                                                    selectedIds - id
+                                                } else {
+                                                    selectedIds + id
+                                                }
+                                        },
+                                        onEnterSelection = { id ->
+                                            isSelectionMode = true
+                                            selectedIds = selectedIds + id
+                                        },
+                                        onOpenNegative = ::openNegativeFromGrid,
+                                        onSoftDeleteNegative = { entity ->
+                                            scope.launch {
+                                                negativeRepository.softDelete(entity.recipeId)
+                                                soundEngine.playDialTick(settings.sfxEnabled)
+                                                snackbarHostState.showSnackbar("Moved to Trash")
+                                            }
+                                        },
+                                        onRestoreNegative = { entity ->
+                                            scope.launch {
+                                                negativeRepository.restoreFromTrash(entity.recipeId)
+                                                soundEngine.playDialTick(settings.sfxEnabled)
+                                                snackbarHostState.showSnackbar("Restored from Trash")
+                                            }
+                                        },
+                                        onPurgeExpiredTrash = {
+                                            scope.launch {
+                                                val purged = negativeRepository.purgeExpiredTrash()
+                                                soundEngine.playDialTick(settings.sfxEnabled)
+                                                snackbarHostState.showSnackbar("Purged $purged expired item(s)")
+                                            }
+                                        },
+                                        onEmptyTrash = {
+                                            scope.launch {
+                                                trashedNegatives.forEach { entity ->
+                                                    GalleryImageDecoder.deleteD3dFramesDir(
+                                                        context.filesDir,
+                                                        entity.recipeId
+                                                    )
+                                                    negativeRepository.deleteNegative(entity.recipeId)
+                                                }
+                                                soundEngine.playDialTick(settings.sfxEnabled)
+                                                snackbarHostState.showSnackbar("Trash emptied")
+                                            }
+                                        },
+                                        onImportPhotoClick = { showImportDialog = true },
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                            }
+                        }
+
+                        if (isSelectionMode) {
+                            val currentList =
+                                if (selectedTab == GalleryFilterTab.ROLLS && selectedRoll != null) {
+                                    selectedRollFrames
+                                } else {
+                                    filteredNegatives
+                                }
+                            BatchSelectionToolbar(
+                                selectedCount = selectedIds.size,
+                                isTrashTab = selectedTab == GalleryFilterTab.TRASH,
+                                isBatchBusy = isBusyExport,
+                                onSelectAll = {
+                                    selectedIds = currentList.map { it.recipeId }.toSet()
+                                },
+                                onClearSelection = {
+                                    isSelectionMode = false
+                                    selectedIds = emptySet()
+                                },
+                                onBatchExport = {
+                                    if (isBusyExport || selectedIds.isEmpty()) return@BatchSelectionToolbar
+                                    scope.launch {
+                                        isBusyExport = true
+                                        val targets = currentList.filter { selectedIds.contains(it.recipeId) }
+                                        var exportedCount = 0
+                                        targets.forEach { entity ->
+                                            val ok =
+                                                runCatching {
+                                                    when (entity.resolvedMediaType()) {
+                                                        MediaType.D3D_BURST -> exportSingleD3dEntity(entity)
+                                                        MediaType.STILL -> exportSingleStillEntity(entity)
+                                                        MediaType.VIDEO -> false
+                                                    }
+                                                }.getOrDefault(false)
+                                            if (ok) exportedCount++
                                         }
+                                        isBusyExport = false
+                                        isSelectionMode = false
+                                        selectedIds = emptySet()
+                                        soundEngine.playFilmWind(settings.sfxEnabled)
+                                        snackbarHostState.showSnackbar(
+                                            "Batch exported $exportedCount/${targets.size} item(s)"
+                                        )
                                     }
                                 },
-                                onImportPhotoClick = ::launchPhotoPicker,
-                                modifier = Modifier.weight(1f)
+                                onBatchSoftDelete = {
+                                    if (selectedIds.isEmpty()) return@BatchSelectionToolbar
+                                    scope.launch {
+                                        val targets = selectedIds.toList()
+                                        targets.forEach { id -> negativeRepository.softDelete(id) }
+                                        isSelectionMode = false
+                                        selectedIds = emptySet()
+                                        soundEngine.playDialTick(settings.sfxEnabled)
+                                        snackbarHostState.showSnackbar("Moved ${targets.size} item(s) to Trash")
+                                    }
+                                },
+                                onBatchRestore = {
+                                    if (selectedIds.isEmpty()) return@BatchSelectionToolbar
+                                    scope.launch {
+                                        val targets = selectedIds.toList()
+                                        targets.forEach { id -> negativeRepository.restoreFromTrash(id) }
+                                        isSelectionMode = false
+                                        selectedIds = emptySet()
+                                        soundEngine.playDialTick(settings.sfxEnabled)
+                                        snackbarHostState.showSnackbar("Restored ${targets.size} item(s)")
+                                    }
+                                },
+                                onBatchPermanentDelete = {
+                                    if (selectedIds.isEmpty()) return@BatchSelectionToolbar
+                                    scope.launch {
+                                        val targets = selectedIds.toList()
+                                        targets.forEach { id ->
+                                            GalleryImageDecoder.deleteD3dFramesDir(context.filesDir, id)
+                                            negativeRepository.deleteNegative(id)
+                                        }
+                                        isSelectionMode = false
+                                        selectedIds = emptySet()
+                                        soundEngine.playDialTick(settings.sfxEnabled)
+                                        snackbarHostState.showSnackbar("Permanently deleted ${targets.size} item(s)")
+                                    }
+                                }
                             )
+                        }
                     }
                 }
             }
@@ -396,12 +1230,12 @@ fun GalleryStudioRoute(
                     modifier =
                     Modifier
                         .fillMaxSize()
-                        .background(ProCcdPalette.BgCharcoal.copy(alpha = 0.72f)),
+                        .background(ProCcdPalette.VoidObsidian.copy(alpha = 0.72f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         shape = RoundedCornerShape(10.dp),
-                        color = ProCcdPalette.SurfaceDark,
+                        color = ProCcdPalette.HardwareSlate,
                         border = BorderStroke(1.dp, ProCcdPalette.BorderMetallic)
                     ) {
                         Row(
@@ -412,14 +1246,14 @@ fun GalleryStudioRoute(
                             CircularProgressIndicator(
                                 modifier = Modifier.size(18.dp),
                                 strokeWidth = 2.dp,
-                                color = ProCcdPalette.LedAmber
+                                color = ProCcdPalette.WarmAmber
                             )
                             Text(
                                 text = "LOADING DARKROOM...",
-                                color = ProCcdPalette.TextPrimary,
+                                color = ProCcdPalette.CreamInk,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = LocalProCcdFonts.current.condensed
                             )
                         }
                     }
@@ -427,20 +1261,61 @@ fun GalleryStudioRoute(
             }
         }
     }
+
+    if (showImportDialog) {
+        ImportModeDialog(
+            onDismiss = { showImportDialog = false },
+            onPickSinglePhoto = ::openSinglePicker,
+            onPickMultiPhoto = ::openMultiPicker
+        )
+    }
+
+    val multiFrames = pendingMultiShotFrames
+    if (multiFrames != null) {
+        MultiShotChoiceDialog(
+            shotCount = multiFrames.size,
+            onDismiss = { pendingMultiShotFrames = null },
+            onChooseBooth = {
+                pendingMultiShotFrames = null
+                val recipe =
+                    GalleryRecipeReducer.createImportedRecipe(
+                        cameraId = "booth",
+                        settings = settings
+                    ).let {
+                        GalleryRecipeReducer.updateFrameStyle(it, FrameBorderStyle.PHOTO_BOOTH_4STRIP)
+                    }
+                boothSession = BoothSession(frames = multiFrames, recipe = recipe)
+            },
+            onChooseD3d = {
+                pendingMultiShotFrames = null
+                val recipe =
+                    GalleryRecipeReducer.createImportedRecipe(
+                        cameraId = "d3d",
+                        settings = settings,
+                        mediaType = MediaType.D3D_BURST,
+                        burstFrameCount = multiFrames.size
+                    )
+                d3dSession = D3dSession(frames = multiFrames, recipe = recipe)
+            }
+        )
+    }
 }
 
 @Composable
-private fun StudioTopHeader(
-    selectedMode: GalleryLabMode,
+private fun WorksTopHeader(
+    selectedTab: GalleryFilterTab,
+    isSelectionMode: Boolean,
     onBack: () -> Unit,
-    onSelectMode: (GalleryLabMode) -> Unit,
+    onToggleSelectMode: () -> Unit,
+    onSelectTab: (GalleryFilterTab) -> Unit,
     onImportPhotoClick: () -> Unit
 ) {
+    val fonts = LocalProCcdFonts.current
     Column(
         modifier =
         Modifier
             .fillMaxWidth()
-            .background(ProCcdPalette.SurfaceDark)
+            .background(ProCcdPalette.HardwareSlate)
             .border(1.dp, ProCcdPalette.BorderMetallic)
             .padding(horizontal = 8.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -455,80 +1330,97 @@ private fun StudioTopHeader(
                     Icon(
                         imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
                         contentDescription = "Back",
-                        tint = ProCcdPalette.TextPrimary
+                        tint = ProCcdPalette.CreamInk
                     )
                 }
                 Column {
                     Text(
-                        text = "AAYNA DARKROOM",
-                        color = ProCcdPalette.TextPrimary,
+                        text = "AAYNA WORKS",
+                        color = ProCcdPalette.CreamInk,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = fonts.condensed
                     )
                     Text(
-                        text = "NON-DESTRUCTIVE GPU STUDIO",
+                        text = "CHARCOAL DARKROOM • STUDIO",
                         color = ProCcdPalette.TextMuted,
                         fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = fonts.led
                     )
                 }
             }
 
-            Button(
-                onClick = onImportPhotoClick,
-                colors =
-                ButtonDefaults.buttonColors(
-                    containerColor = ProCcdPalette.LedAmber,
-                    contentColor = ProCcdPalette.BgCharcoal
-                ),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                shape = RoundedCornerShape(8.dp)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Rounded.AddPhotoAlternate,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = "IMPORT",
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
+                IconButton(onClick = onToggleSelectMode) {
+                    Icon(
+                        imageVector = Icons.Rounded.Checklist,
+                        contentDescription = "Multi-select",
+                        tint = if (isSelectionMode) ProCcdPalette.WarmAmber else ProCcdPalette.TextSecondary
+                    )
+                }
+
+                Button(
+                    onClick = onImportPhotoClick,
+                    colors =
+                    ButtonDefaults.buttonColors(
+                        containerColor = ProCcdPalette.WarmAmber,
+                        contentColor = ProCcdPalette.VoidObsidian
+                    ),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.AddPhotoAlternate,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "IMPORT",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = fonts.condensed
+                    )
+                }
             }
         }
 
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            GalleryLabMode.entries.forEach { mode ->
-                val selected = mode == selectedMode
+            GalleryFilterTab.entries.forEach { tab ->
+                val selected = tab == selectedTab
+                val accent = if (tab == GalleryFilterTab.TRASH) ProCcdPalette.LedRed else ProCcdPalette.WarmAmber
                 Box(
                     modifier =
                     Modifier
-                        .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
                         .background(
-                            if (selected) ProCcdPalette.SurfaceElevated else ProCcdPalette.BgCharcoal
+                            if (selected) ProCcdPalette.SurfaceElevated else ProCcdPalette.VoidObsidian
                         )
                         .border(
                             width = 1.dp,
-                            color = if (selected) ProCcdPalette.LedCyan else ProCcdPalette.BorderMetallic,
+                            color = if (selected) accent else ProCcdPalette.BorderMetallic,
                             shape = RoundedCornerShape(8.dp)
                         )
-                        .clickable { onSelectMode(mode) }
-                        .padding(vertical = 8.dp),
+                        .clickable { onSelectTab(tab) }
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = mode.label,
-                        color = if (selected) ProCcdPalette.LedCyan else ProCcdPalette.TextSecondary,
+                        text = tab.label.uppercase(Locale.US),
+                        color = if (selected) accent else ProCcdPalette.TextSecondary,
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = fonts.condensed
                     )
                 }
             }

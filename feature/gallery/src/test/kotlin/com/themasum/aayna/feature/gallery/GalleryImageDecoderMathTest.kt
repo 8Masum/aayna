@@ -68,4 +68,22 @@ class GalleryImageDecoderMathTest {
         assertEquals(270, transverse.rotationDegrees)
         assertTrue(transverse.flipHorizontal)
     }
+
+    @Test
+    fun `d3d timing math clamps delays and computes ping-pong wiggle sequence accurately`() {
+        assertEquals(80, GalleryD3dTimingMath.clampFrameDelayMs(20))
+        assertEquals(320, GalleryD3dTimingMath.clampFrameDelayMs(500))
+        assertEquals(140, GalleryD3dTimingMath.clampFrameDelayMs(140))
+
+        assertEquals(listOf(0, 1, 2, 3, 2, 1), GalleryD3dTimingMath.computeSequenceIndices(4, pingPong = true))
+        assertEquals(listOf(0, 1, 2, 3), GalleryD3dTimingMath.computeSequenceIndices(4, pingPong = false))
+        assertEquals(840L, GalleryD3dTimingMath.computeCycleDurationMs(4, 140, pingPong = true))
+        assertEquals(560L, GalleryD3dTimingMath.computeCycleDurationMs(4, 140, pingPong = false))
+
+        assertEquals(0, GalleryD3dTimingMath.computeFrameIndexAtElapsed(0L, 4, 100, pingPong = true))
+        assertEquals(3, GalleryD3dTimingMath.computeFrameIndexAtElapsed(350L, 4, 100, pingPong = true))
+        assertEquals(2, GalleryD3dTimingMath.computeFrameIndexAtElapsed(410L, 4, 100, pingPong = true))
+        assertEquals(1, GalleryD3dTimingMath.computeFrameIndexAtElapsed(550L, 4, 100, pingPong = true))
+        assertEquals(0, GalleryD3dTimingMath.computeFrameIndexAtElapsed(600L, 4, 100, pingPong = true))
+    }
 }

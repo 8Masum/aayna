@@ -7,10 +7,13 @@ import com.themasum.aayna.core.model.ExposureMath
 import com.themasum.aayna.core.model.FlashMode
 import com.themasum.aayna.core.model.FrameBorderStyle
 import com.themasum.aayna.core.model.LensAttachment
+import com.themasum.aayna.core.model.StampFontStyle
+import com.themasum.aayna.core.model.StampPosition
 import com.themasum.aayna.core.model.TimerDuration
 import com.themasum.aayna.core.model.UserSettingsSnapshot
 import com.themasum.aayna.core.model.WhiteBalancePreset
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -23,11 +26,12 @@ class ViewfinderStateReducerTest {
                 storageMode = CaptureStorageMode.ANALOG_DEVELOPING_RITUAL,
                 dualSaveEnabled = true,
                 gridEnabled = true,
-                rollCapacity = 36
+                rollCapacity = 36,
+                selectedSkinByCamera = mapOf(CameraCatalog.instm.id to "skin_y2k_lavender")
             )
         val initial =
             ViewfinderUiState(
-                activeCamera = CameraCatalog.dc04SilverPulse,
+                activeCamera = CameraCatalog.z30,
                 settings = customSettings,
                 isGridVisible = true,
                 isFrontCamera = true,
@@ -35,13 +39,14 @@ class ViewfinderStateReducerTest {
                 activePanel = ViewfinderPanel.CAMERA_SHELF
             )
 
-        val switched = ViewfinderStateReducer.switchCamera(initial, CameraCatalog.instMInstant)
+        val switched = ViewfinderStateReducer.switchCamera(initial, CameraCatalog.instm)
 
-        assertEquals(CameraCatalog.instMInstant.id, switched.activeCamera.id)
-        assertEquals(AspectRatioPreset.RATIO_1_1, switched.opticalSettings.aspectRatio)
+        assertEquals(CameraCatalog.instm.id, switched.activeCamera.id)
+        assertEquals("skin_y2k_lavender", switched.activeSkinId)
+        assertEquals(AspectRatioPreset.RATIO_4_3, switched.opticalSettings.aspectRatio)
         assertEquals(FrameBorderStyle.INSTANT_PRINT, switched.opticalSettings.frameStyle)
-        assertEquals(CameraCatalog.instMInstant.bloom.intensity, switched.opticalSettings.bloomIntensity, 0.001f)
-        assertEquals(CameraCatalog.instMInstant.eraYearOffset, switched.stampConfig.eraYear)
+        assertEquals(CameraCatalog.instm.bloom.intensity, switched.opticalSettings.bloomIntensity, 0.001f)
+        assertEquals(CameraCatalog.instm.eraYearOffset, switched.stampConfig.eraYear)
         assertEquals(ViewfinderPanel.NONE, switched.activePanel)
         assertTrue(switched.isGridVisible)
         assertTrue(switched.isFrontCamera)
@@ -50,8 +55,9 @@ class ViewfinderStateReducerTest {
     }
 
     @Test
-    fun switchCamera_allSixCamerasProduceValidDefaults() {
+    fun switchCamera_allCamerasProduceValidDefaults() {
         val base = ViewfinderUiState()
+        assertEquals(83, CameraCatalog.all.size)
         for (profile in CameraCatalog.all) {
             val next = ViewfinderStateReducer.switchCamera(base, profile)
             assertEquals(profile.id, next.activeCamera.id)
@@ -59,6 +65,90 @@ class ViewfinderStateReducerTest {
             assertEquals(profile.defaultFrame, next.opticalSettings.frameStyle)
             assertEquals(profile.eraYearOffset, next.stampConfig.eraYear)
         }
+    }
+
+    @Test
+    fun applyUserSettings_preservesStampFontPositionAndSkinOverride() {
+        val initial = ViewfinderStateReducer.switchCamera(ViewfinderUiState(), CameraCatalog.z30)
+        val settings =
+            UserSettingsSnapshot(
+                useHardwareAeCompatibility = true,
+                stampFontStyle = StampFontStyle.VCR_OSD,
+                stampPosition = StampPosition.TOP_LEFT,
+                selectedSkinByCamera = mapOf(CameraCatalog.z30.id to "skin_cyber_translucent"),
+                gridEnabled = true
+            )
+
+        val updated = ViewfinderStateReducer.applyUserSettings(initial, settings, syncGridFromSettings = false)
+
+        assertEquals("skin_cyber_translucent", updated.activeSkinId)
+        assertEquals(StampFontStyle.VCR_OSD, updated.stampConfig.fontStyle)
+        assertEquals(StampPosition.TOP_LEFT, updated.stampConfig.position)
+        assertTrue(updated.settings.useHardwareAeCompatibility)
+        assertFalse(updated.isGridVisible)
+    }
+
+    @Test
+    fun shouldBlockCaptureForRoll_blocksOnlyAnalogRitualAtCapacity() {
+        assertTrue(
+            ViewfinderStateReducer.shouldBlockCaptureForRoll(
+                storageMode = CaptureStorageMode.ANALOG_DEVELOPING_RITUAL,
+                shotsTaken = 24,
+                capacity = 24
+            )
+        )
+        assertTrue(
+            ViewfinderStateReducer.shouldBlockCaptureForRoll(
+                storageMode = CaptureStorageMode.ANALOG_DEVELOPING_RITUAL,
+                shotsTaken = 36,
+                capacity = 36
+            )
+        )
+        assertFalse(
+            ViewfinderStateReducer.shouldBlockCaptureForRoll(
+                storageMode = CaptureStorageMode.ANALOG_DEVELOPING_RITUAL,
+                shotsTaken = 23,
+                capacity = 24
+            )
+        )
+        assertFalse(
+            ViewfinderStateReducer.shouldBlockCaptureForRoll(
+                storageMode = CaptureStorageMode.INSTANT_DIGICAM,
+                shotsTaken = 24,
+                capacity = 24
+            )
+        )
+        assertFalse(
+            ViewfinderStateReducer.shouldBlockCaptureForRoll(
+                storageMode = CaptureStorageMode.NON_DESTRUCTIVE_ROLL,
+                shotsTaken = 36,
+                capacity = 36
+            )
+        )
+    }
+
+    @Test
+    fun resolveCaptureKind_routesVideoD3dBoothAndStillCorrectly() {
+        assertEquals(
+            CaptureKind.VIDEO,
+            ViewfinderStateReducer.resolveCaptureKind(CameraCatalog.dcr, isVideoMode = true)
+        )
+        assertEquals(
+            CaptureKind.STILL,
+            ViewfinderStateReducer.resolveCaptureKind(CameraCatalog.dcr, isVideoMode = false)
+        )
+        assertEquals(
+            CaptureKind.STILL,
+            ViewfinderStateReducer.resolveCaptureKind(CameraCatalog.z30, isVideoMode = true)
+        )
+        assertEquals(
+            CaptureKind.D3D_BURST,
+            ViewfinderStateReducer.resolveCaptureKind(CameraCatalog.d3d, isVideoMode = false)
+        )
+        assertEquals(
+            CaptureKind.PHOTO_BOOTH,
+            ViewfinderStateReducer.resolveCaptureKind(CameraCatalog.booth, isVideoMode = false)
+        )
     }
 
     @Test
@@ -88,7 +178,7 @@ class ViewfinderStateReducerTest {
             iso = ViewfinderStateReducer.cycleIso(iso)
             sequence.add(iso)
         }
-        assertEquals(listOf(100, 200, 400, 800, 1600, null), sequence)
+        assertEquals(listOf(50, 100, 200, 400, 800, 1600, null), sequence)
         assertNull(sequence.last())
     }
 
@@ -118,16 +208,15 @@ class ViewfinderStateReducerTest {
     }
 
     @Test
-    fun cycleLensAttachment_cyclesAllFourAttachments() {
-        val l1 = ViewfinderStateReducer.cycleLensAttachment(LensAttachment.STANDARD)
-        val l2 = ViewfinderStateReducer.cycleLensAttachment(l1)
-        val l3 = ViewfinderStateReducer.cycleLensAttachment(l2)
-        val l4 = ViewfinderStateReducer.cycleLensAttachment(l3)
-
-        assertEquals(LensAttachment.FISHEYE, l1)
-        assertEquals(LensAttachment.STAR_4PT, l2)
-        assertEquals(LensAttachment.STAR_6PT, l3)
-        assertEquals(LensAttachment.STANDARD, l4)
+    fun cycleLensAttachment_cyclesAllNineAttachments() {
+        var current = LensAttachment.STANDARD
+        val seen = mutableListOf<LensAttachment>()
+        repeat(LensAttachment.entries.size) {
+            current = ViewfinderStateReducer.cycleLensAttachment(current)
+            seen.add(current)
+        }
+        assertEquals(LensAttachment.entries.size, seen.distinct().size)
+        assertEquals(LensAttachment.STANDARD, seen.last())
     }
 
     @Test
@@ -142,28 +231,28 @@ class ViewfinderStateReducerTest {
     fun toggleFrameStyle_respectsCameraOptionalAndDefaultFrames() {
         assertEquals(
             FrameBorderStyle.FILM_35MM,
-            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.rf77Classic, FrameBorderStyle.NONE)
+            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.m7, FrameBorderStyle.NONE)
         )
         assertEquals(
             FrameBorderStyle.NONE,
-            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.rf77Classic, FrameBorderStyle.FILM_35MM)
+            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.m7, FrameBorderStyle.FILM_35MM)
         )
         assertEquals(
             FrameBorderStyle.INSTANT_PRINT,
-            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.dc04SilverPulse, FrameBorderStyle.NONE)
+            ViewfinderStateReducer.toggleFrameStyle(CameraCatalog.z30, FrameBorderStyle.NONE)
         )
     }
 
     @Test
     fun toggleLeaksAndDust_togglesOffAndRestoresNonZeroStrength() {
-        val lomoDefaults = ViewfinderStateReducer.defaultOpticalSettingsFor(CameraCatalog.lomo94Grunge)
+        val lomoDefaults = ViewfinderStateReducer.defaultOpticalSettingsFor(CameraCatalog.lomo)
         assertTrue(lomoDefaults.lightLeakIntensity > 0f)
 
-        val turnedOff = ViewfinderStateReducer.toggleLeaksAndDust(CameraCatalog.lomo94Grunge, lomoDefaults)
+        val turnedOff = ViewfinderStateReducer.toggleLeaksAndDust(CameraCatalog.lomo, lomoDefaults)
         assertEquals(0f, turnedOff.lightLeakIntensity, 0.001f)
         assertEquals(0f, turnedOff.dustIntensity, 0.001f)
 
-        val turnedOn = ViewfinderStateReducer.toggleLeaksAndDust(CameraCatalog.dc04SilverPulse, turnedOff)
+        val turnedOn = ViewfinderStateReducer.toggleLeaksAndDust(CameraCatalog.z30, turnedOff)
         assertTrue(turnedOn.lightLeakIntensity > 0f)
         assertTrue(turnedOn.dustIntensity > 0f)
     }

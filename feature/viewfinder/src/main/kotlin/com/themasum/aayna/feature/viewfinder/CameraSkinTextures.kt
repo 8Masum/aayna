@@ -1,8 +1,15 @@
 package com.themasum.aayna.feature.viewfinder
 
 import android.graphics.Color as AndroidColor
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -12,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -33,10 +41,12 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,29 +73,33 @@ internal fun Modifier.cameraChassisSurface(skin: CameraSkinSpec): Modifier = thi
         drawRect(color = primary)
 
         when (skin.chassisMaterial) {
-            ChassisMaterial.BRUSHED_SILVER -> {
-                drawBrushedSilver(primary, secondary)
-            }
+            ChassisMaterial.BRUSHED_SILVER,
+            ChassisMaterial.CHAMPAGNE_TITANIUM,
+            ChassisMaterial.BRASS_RANGEFINDER,
+            ChassisMaterial.STUDIO_MONOCHROME -> drawBrushedSilver(primary, secondary)
 
-            ChassisMaterial.ANODIZED_GUNMETAL -> {
-                drawAnodizedGunmetal(primary, secondary)
-            }
+            ChassisMaterial.ANODIZED_GUNMETAL,
+            ChassisMaterial.CHARCOAL_METAL,
+            ChassisMaterial.COBALT_METALLIC,
+            ChassisMaterial.CINE_ANODIZED,
+            ChassisMaterial.SLR_PRISM_GRIP,
+            ChassisMaterial.PHOTOBOOTH_BRONZE,
+            ChassisMaterial.HANDHELD_ANODIZED -> drawAnodizedGunmetal(primary, secondary)
 
-            ChassisMaterial.RIBBED_PLASTIC -> {
-                drawRibbedPlastic(primary, secondary)
-            }
+            ChassisMaterial.RIBBED_PLASTIC,
+            ChassisMaterial.Y2K_TRANSLUCENT,
+            ChassisMaterial.PEARLESCENT_Y2K,
+            ChassisMaterial.VHS_GRAPHITE -> drawRibbedPlastic(primary, secondary)
 
-            ChassisMaterial.WEATHERED_GRUNGE_SLATE -> {
-                drawWeatheredGrunge(primary, secondary)
-            }
+            ChassisMaterial.WEATHERED_GRUNGE_SLATE -> drawWeatheredGrunge(primary, secondary)
 
-            ChassisMaterial.PEBBLE_LEATHERETTE -> {
-                drawPebbleLeatherette(primary, secondary)
-            }
+            ChassisMaterial.PEBBLE_LEATHERETTE,
+            ChassisMaterial.MATTE_OBSIDIAN,
+            ChassisMaterial.COGNAC_LEATHER,
+            ChassisMaterial.OLIVE_LEATHER -> drawPebbleLeatherette(primary, secondary)
 
-            ChassisMaterial.WARM_CREAM_INSTANT -> {
-                drawWarmCreamInstant(primary, secondary)
-            }
+            ChassisMaterial.WARM_CREAM_INSTANT,
+            ChassisMaterial.PASTEL_POLYMER -> drawWarmCreamInstant(primary, secondary)
         }
 
         drawAccentMotif(skin.accentMotif, secondary, accent)
@@ -239,7 +253,6 @@ private fun DrawScope.drawWarmCreamInstant(primary: Color, secondary: Color) {
             colors = listOf(primary, primary.copy(alpha = 0.96f), secondary.copy(alpha = 0.55f))
         )
     )
-    // Instant film eject slot motif near the bottom
     val slotWidth = size.width * 0.62f
     val slotHeight = 7.dp.toPx()
     val slotLeft = (size.width - slotWidth) / 2f
@@ -266,7 +279,8 @@ private fun DrawScope.drawAccentMotif(motif: SkinAccentMotif, secondary: Color, 
             )
         }
 
-        SkinAccentMotif.TITANIUM_BEZEL -> {
+        SkinAccentMotif.TITANIUM_BEZEL,
+        SkinAccentMotif.BRASS_ENGRAVING -> {
             drawRect(
                 color = accent.copy(alpha = 0.22f),
                 topLeft = Offset(0f, 0f),
@@ -274,7 +288,8 @@ private fun DrawScope.drawAccentMotif(motif: SkinAccentMotif, secondary: Color, 
             )
         }
 
-        SkinAccentMotif.RED_ADVANCE_WHEEL -> {
+        SkinAccentMotif.RED_ADVANCE_WHEEL,
+        SkinAccentMotif.KNURLED_DIAL_RING -> {
             val wheelRadius = 18.dp.toPx()
             val center = Offset(size.width - 14.dp.toPx(), 28.dp.toPx())
             drawCircle(color = accent, radius = wheelRadius, center = center)
@@ -328,7 +343,8 @@ private fun DrawScope.drawAccentMotif(motif: SkinAccentMotif, secondary: Color, 
             )
         }
 
-        SkinAccentMotif.TRICOLOR_STRIPE -> {
+        SkinAccentMotif.TRICOLOR_STRIPE,
+        SkinAccentMotif.Y2K_RIBBON -> {
             val stripeY = size.height * 0.78f
             val stripeH = 3.dp.toPx()
             val colors = listOf(Color(0xFFE24B2C), Color(0xFFF2B632), Color(0xFF4FB3A5))
@@ -340,12 +356,25 @@ private fun DrawScope.drawAccentMotif(motif: SkinAccentMotif, secondary: Color, 
                 )
             }
         }
+
+        SkinAccentMotif.CINE_TALLY_LAMP -> {
+            drawCircle(
+                color = accent,
+                radius = 4.dp.toPx(),
+                center = Offset(size.width - 16.dp.toPx(), 16.dp.toPx())
+            )
+        }
     }
 }
 
 @Composable
-internal fun HardwareLcdStrip(state: ViewfinderUiState, modifier: Modifier = Modifier) {
-    val skin = state.activeCamera.skin
+internal fun HardwareLcdStrip(
+    state: ViewfinderUiState,
+    ledFontFamily: FontFamily = FontFamily.Monospace,
+    dotMatrixFontFamily: FontFamily = FontFamily.Monospace,
+    modifier: Modifier = Modifier
+) {
+    val skin = state.activeSkin
     val lcdBg = parseHexColor(skin.lcdBackgroundHex, Color(0xFF0B1E24))
     val lcdFg = parseHexColor(skin.lcdForegroundHex, Color(0xFF62F0FF))
     val borderColor = lcdFg.copy(alpha = 0.35f)
@@ -363,11 +392,12 @@ internal fun HardwareLcdStrip(state: ViewfinderUiState, modifier: Modifier = Mod
     val modeBadge = ViewfinderStateReducer.formatLcdModeBadge(state)
     val lcdFont =
         when (skin.lcdTheme) {
-            LcdTheme.CYAN_DOT_MATRIX,
             LcdTheme.EMERALD_SEVEN_SEG,
             LcdTheme.AMBER_COUNTER,
-            LcdTheme.WARM_MONOCHROME
-            -> FontFamily.Monospace
+            LcdTheme.CLASSIC_RED_LED -> ledFontFamily
+            LcdTheme.CYAN_DOT_MATRIX,
+            LcdTheme.WARM_MONOCHROME,
+            LcdTheme.VCR_BLUE_OSD -> dotMatrixFontFamily
         }
 
     Row(
@@ -377,7 +407,7 @@ internal fun HardwareLcdStrip(state: ViewfinderUiState, modifier: Modifier = Mod
             .clip(RoundedCornerShape(8.dp))
             .background(lcdBg)
             .border(1.dp, borderColor, RoundedCornerShape(8.dp))
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 10.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -449,12 +479,110 @@ private fun LcdMetric(label: String, value: String, fg: Color, font: FontFamily)
 }
 
 @Composable
+internal fun LayeredPngShutterButton(
+    skin: CameraSkinSpec,
+    shutterBitmap: ImageBitmap?,
+    isCapturing: Boolean,
+    isVideoMode: Boolean,
+    isRecordingVideo: Boolean,
+    countdownSeconds: Int?,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed || isCapturing) 0.89f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = "layeredShutterScale"
+    )
+    val pulseTransition = rememberInfiniteTransition(label = "recPulse")
+    val recPulseAlpha by pulseTransition.animateFloat(
+        initialValue = 0.45f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(animation = tween(550), repeatMode = RepeatMode.Reverse),
+        label = "recPulseAlpha"
+    )
+
+    if (shutterBitmap != null) {
+        Box(
+            modifier =
+            modifier
+                .scale(scale)
+                .size(74.dp)
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null,
+                    enabled = !isCapturing || isRecordingVideo,
+                    onClick = onClick
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Image(
+                bitmap = shutterBitmap,
+                contentDescription = if (isRecordingVideo) "Stop Recording" else "Shutter",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (isRecordingVideo) {
+                Box(
+                    modifier =
+                    Modifier
+                        .size(28.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(Color(0xFFE53935).copy(alpha = recPulseAlpha))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.85f), RoundedCornerShape(7.dp))
+                )
+            } else if (isVideoMode) {
+                Box(
+                    modifier =
+                    Modifier
+                        .size(20.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFE53935))
+                        .border(1.5.dp, Color.White.copy(alpha = 0.8f), CircleShape)
+                )
+            } else if (countdownSeconds != null) {
+                Box(
+                    modifier =
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.72f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = countdownSeconds.toString(),
+                        color = Color.White,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    } else {
+        MorphingShutterButton(
+            skin = skin,
+            isCapturing = isCapturing && !isRecordingVideo,
+            isVideoMode = isVideoMode,
+            isRecordingVideo = isRecordingVideo,
+            countdownSeconds = countdownSeconds,
+            onClick = onClick,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
 internal fun MorphingShutterButton(
     skin: CameraSkinSpec,
     isCapturing: Boolean,
     countdownSeconds: Int?,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isVideoMode: Boolean = false,
+    isRecordingVideo: Boolean = false
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -472,15 +600,24 @@ internal fun MorphingShutterButton(
         when (skin.shutterStyle) {
             ShutterStyle.PILL_CHROME -> RoundedCornerShape(28.dp)
             ShutterStyle.CHUNKY_TOGGLE -> RoundedCornerShape(16.dp)
-            ShutterStyle.PASTEL_MINT_BUTTON -> RoundedCornerShape(20.dp)
+            ShutterStyle.PASTEL_MINT_BUTTON,
+            ShutterStyle.PASTEL_BLUSH_BUTTON -> RoundedCornerShape(20.dp)
             ShutterStyle.RECESSED_METAL_RING,
             ShutterStyle.OVERSIZED_ORANGE,
-            ShutterStyle.KNURLED_CLASSIC
-            -> CircleShape
+            ShutterStyle.KNURLED_CLASSIC,
+            ShutterStyle.BRUSHED_DOME,
+            ShutterStyle.CAMCORDER_REC_BUTTON,
+            ShutterStyle.BRASS_MECHANICAL -> CircleShape
         }
 
     val outerWidth = if (skin.shutterStyle == ShutterStyle.PILL_CHROME) 82.dp else 72.dp
     val outerHeight = if (skin.shutterStyle == ShutterStyle.PILL_CHROME) 64.dp else 72.dp
+    val effectiveTint =
+        when {
+            isRecordingVideo -> Color(0xFFE53935)
+            isVideoMode -> Color(0xFFE53935).copy(alpha = 0.85f)
+            else -> shutterColor
+        }
 
     Box(
         modifier =
@@ -494,7 +631,7 @@ internal fun MorphingShutterButton(
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
-                enabled = !isCapturing,
+                enabled = !isCapturing || isRecordingVideo,
                 onClick = onClick
             ),
         contentAlignment = Alignment.Center
@@ -509,35 +646,36 @@ internal fun MorphingShutterButton(
                         .clip(RoundedCornerShape(22.dp))
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.White, shutterColor, Color(0xFF9BA1AC))
+                                colors = listOf(Color.White, effectiveTint, Color(0xFF9BA1AC))
                             )
                         )
                         .border(1.5.dp, Color.White.copy(alpha = 0.7f), RoundedCornerShape(22.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    ShutterCountdownOrDot(countdownSeconds, labelColor)
+                    ShutterCountdownOrDot(countdownSeconds, labelColor, isRecordingVideo)
                 }
             }
 
-            ShutterStyle.RECESSED_METAL_RING -> {
+            ShutterStyle.RECESSED_METAL_RING,
+            ShutterStyle.CAMCORDER_REC_BUTTON -> {
                 Box(
                     modifier =
                     Modifier
                         .size(56.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF2B303A))
-                        .border(2.dp, shutterColor, CircleShape),
+                        .border(2.dp, effectiveTint, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Box(
                         modifier =
                         Modifier
                             .size(38.dp)
-                            .clip(CircleShape)
-                            .background(shutterColor),
+                            .clip(if (isRecordingVideo) RoundedCornerShape(8.dp) else CircleShape)
+                            .background(effectiveTint),
                         contentAlignment = Alignment.Center
                     ) {
-                        ShutterCountdownOrDot(countdownSeconds, accentColor)
+                        ShutterCountdownOrDot(countdownSeconds, accentColor, isRecordingVideo)
                     }
                 }
             }
@@ -548,11 +686,11 @@ internal fun MorphingShutterButton(
                     Modifier
                         .size(60.dp)
                         .clip(CircleShape)
-                        .background(shutterColor)
+                        .background(effectiveTint)
                         .border(2.dp, Color(0xFFFFB088), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    ShutterCountdownOrDot(countdownSeconds, Color(0xFF1A1412))
+                    ShutterCountdownOrDot(countdownSeconds, Color(0xFF1A1412), isRecordingVideo)
                 }
             }
 
@@ -562,15 +700,16 @@ internal fun MorphingShutterButton(
                     Modifier
                         .size(56.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(shutterColor)
+                        .background(effectiveTint)
                         .border(2.dp, Color(0xFFE8E4D8).copy(alpha = 0.5f), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    ShutterCountdownOrDot(countdownSeconds, Color(0xFFF5EFE6))
+                    ShutterCountdownOrDot(countdownSeconds, Color(0xFFF5EFE6), isRecordingVideo)
                 }
             }
 
-            ShutterStyle.KNURLED_CLASSIC -> {
+            ShutterStyle.KNURLED_CLASSIC,
+            ShutterStyle.BRASS_MECHANICAL -> {
                 Box(
                     modifier =
                     Modifier
@@ -582,7 +721,7 @@ internal fun MorphingShutterButton(
                                 for (deg in 0 until 360 step 15) {
                                     val rad = Math.toRadians(deg.toDouble())
                                     drawLine(
-                                        color = shutterColor.copy(alpha = 0.75f),
+                                        color = effectiveTint.copy(alpha = 0.75f),
                                         start =
                                         Offset(
                                             center.x + (cos(rad) * (radius - 5.dp.toPx())).toFloat(),
@@ -605,27 +744,29 @@ internal fun MorphingShutterButton(
                         modifier =
                         Modifier
                             .size(42.dp)
-                            .clip(CircleShape)
-                            .background(shutterColor)
+                            .clip(if (isRecordingVideo) RoundedCornerShape(8.dp) else CircleShape)
+                            .background(effectiveTint)
                             .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        ShutterCountdownOrDot(countdownSeconds, Color(0xFF191A1D))
+                        ShutterCountdownOrDot(countdownSeconds, Color(0xFF191A1D), isRecordingVideo)
                     }
                 }
             }
 
-            ShutterStyle.PASTEL_MINT_BUTTON -> {
+            ShutterStyle.PASTEL_MINT_BUTTON,
+            ShutterStyle.PASTEL_BLUSH_BUTTON,
+            ShutterStyle.BRUSHED_DOME -> {
                 Box(
                     modifier =
                     Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(shutterColor)
+                        .background(effectiveTint)
                         .border(2.5.dp, Color.White, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    ShutterCountdownOrDot(countdownSeconds, Color(0xFF1D2B27))
+                    ShutterCountdownOrDot(countdownSeconds, Color(0xFF1D2B27), isRecordingVideo)
                 }
             }
         }
@@ -633,22 +774,34 @@ internal fun MorphingShutterButton(
 }
 
 @Composable
-private fun ShutterCountdownOrDot(countdownSeconds: Int?, tint: Color) {
-    if (countdownSeconds != null) {
-        Text(
-            text = countdownSeconds.toString(),
-            color = tint,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.ExtraBold,
-            fontFamily = FontFamily.Monospace
-        )
-    } else {
-        Box(
-            modifier =
-            Modifier
-                .size(10.dp)
-                .clip(CircleShape)
-                .background(tint.copy(alpha = 0.75f))
-        )
+private fun ShutterCountdownOrDot(countdownSeconds: Int?, tint: Color, isRecordingVideo: Boolean = false) {
+    when {
+        countdownSeconds != null -> {
+            Text(
+                text = countdownSeconds.toString(),
+                color = tint,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        isRecordingVideo -> {
+            Box(
+                modifier =
+                Modifier
+                    .size(16.dp)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color.White)
+            )
+        }
+        else -> {
+            Box(
+                modifier =
+                Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(tint.copy(alpha = 0.75f))
+            )
+        }
     }
 }
