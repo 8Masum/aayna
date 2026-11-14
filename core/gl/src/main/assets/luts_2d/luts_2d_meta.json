@@ -1,0 +1,758 @@
+{
+  "format": "LUT_2D_64x64x8x8",
+  "width": 512,
+  "height": 512,
+  "cubeSize": 64,
+  "tilesX": 8,
+  "tilesY": 8,
+  "packing": "x=(b%8)*64+r, y=(b//8)*64+g",
+  "luts": {
+    "z30": {
+      "file": "luts_2d/z30.png",
+      "category": "CCD",
+      "description": "Balanced crisp early-2000s CCD with cool cyan-blue shadows and clean skin tones",
+      "contrast": 1.1,
+      "saturation": 1.08,
+      "warmth": -0.12,
+      "bw": false
+    },
+    "ixus95": {
+      "file": "luts_2d/ixus95.png",
+      "category": "CCD",
+      "description": "Warm nostalgic compact CCD with golden highlights and gentle contrast",
+      "contrast": 1.08,
+      "saturation": 1.12,
+      "warmth": 0.22,
+      "bw": false
+    },
+    "m532": {
+      "file": "luts_2d/m532.png",
+      "category": "CCD",
+      "description": "Kodak-inspired punchy CCD with rich reds, warm mids, and crisp blacks",
+      "contrast": 1.16,
+      "saturation": 1.18,
+      "warmth": 0.18,
+      "bw": false
+    },
+    "u300": {
+      "file": "luts_2d/u300.png",
+      "category": "CCD",
+      "description": "Cool silvery-blue Japanese compact CCD with airy highlights",
+      "contrast": 1.06,
+      "saturation": 0.96,
+      "warmth": -0.25,
+      "bw": false
+    },
+    "ixus210": {
+      "file": "luts_2d/ixus210.png",
+      "category": "CCD",
+      "description": "Vibrant touchscreen-era CCD with boosted blues/greens and glossy contrast",
+      "contrast": 1.14,
+      "saturation": 1.22,
+      "warmth": -0.05,
+      "bw": false
+    },
+    "dc200": {
+      "file": "luts_2d/dc200.png",
+      "category": "CCD",
+      "description": "Retro 2001 low-res CCD with slight green-cyan cast and lifted shadows",
+      "contrast": 1.04,
+      "saturation": 0.92,
+      "warmth": -0.08,
+      "bw": false
+    },
+    "grf": {
+      "file": "luts_2d/grf.png",
+      "category": "Film",
+      "description": "High-contrast street monochrome/rich black with deep crushed shadows",
+      "contrast": 1.35,
+      "saturation": 0.0,
+      "warmth": 0.0,
+      "bw": true
+    },
+    "dcr": {
+      "file": "luts_2d/dcr.png",
+      "category": "Camcorder",
+      "description": "2000s MiniDV camcorder with cool electronic highlights and punchy video gamma",
+      "contrast": 1.18,
+      "saturation": 1.1,
+      "warmth": -0.22,
+      "bw": false
+    },
+    "v80": {
+      "file": "luts_2d/v80.png",
+      "category": "Camcorder",
+      "description": "Analog Video8/VHS tape grade with muted highlights and warm-magenta chroma",
+      "contrast": 1.05,
+      "saturation": 0.88,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "ccd801": {
+      "file": "luts_2d/ccd801.png",
+      "category": "Camcorder",
+      "description": "Digital8 camcorder with crisp contrast and cool tungsten-balanced shadows",
+      "contrast": 1.15,
+      "saturation": 1.05,
+      "warmth": -0.18,
+      "bw": false
+    },
+    "m20": {
+      "file": "luts_2d/m20.png",
+      "category": "Camcorder",
+      "description": "Pocket vertical camcorder with bright consumer saturation and warm skin",
+      "contrast": 1.12,
+      "saturation": 1.2,
+      "warmth": 0.15,
+      "bw": false
+    },
+    "m550": {
+      "file": "luts_2d/m550.png",
+      "category": "CCD",
+      "description": "Clean daylight CCD with neutral-warm balance and soft highlight roll-off",
+      "contrast": 1.09,
+      "saturation": 1.1,
+      "warmth": 0.08,
+      "bw": false
+    },
+    "t10": {
+      "file": "luts_2d/t10.png",
+      "category": "CCD",
+      "description": "Slim cyber-compact CCD with cool-magenta indoor flash tone",
+      "contrast": 1.14,
+      "saturation": 1.04,
+      "warmth": -0.16,
+      "bw": false
+    },
+    "instm": {
+      "file": "luts_2d/instm.png",
+      "category": "Instant",
+      "description": "Instant mini film with creamy pastel highlights and teal-green shadows",
+      "contrast": 1.06,
+      "saturation": 0.9,
+      "warmth": 0.05,
+      "bw": false
+    },
+    "instl": {
+      "file": "luts_2d/instl.png",
+      "category": "Instant",
+      "description": "Wide instant film with soft vintage fade and warm cream highlights",
+      "contrast": 1.04,
+      "saturation": 0.94,
+      "warmth": 0.14,
+      "bw": false
+    },
+    "fxnr": {
+      "file": "luts_2d/fxnr.png",
+      "category": "Film",
+      "description": "Classic Japanese rangefinder film with emerald shadows and warm skin tones",
+      "contrast": 1.15,
+      "saturation": 1.06,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "quik": {
+      "file": "luts_2d/quik.png",
+      "category": "Film",
+      "description": "Disposable 400-speed daylight film with green-tinted shadows and punchy grain curve",
+      "contrast": 1.18,
+      "saturation": 1.12,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "d3d": {
+      "file": "luts_2d/d3d.png",
+      "category": "Special",
+      "description": "90s 4-lens film camera with punchy flash contrast and subtle cross-process",
+      "contrast": 1.2,
+      "saturation": 1.15,
+      "warmth": 0.12,
+      "bw": false
+    },
+    "n800": {
+      "file": "luts_2d/n800.png",
+      "category": "CCD",
+      "description": "Night-oriented CCD with tungsten-balanced cool blues and clean neon highlights",
+      "contrast": 1.16,
+      "saturation": 1.14,
+      "warmth": -0.28,
+      "bw": false
+    },
+    "f100": {
+      "file": "luts_2d/f100.png",
+      "category": "Film",
+      "description": "Warm 100-speed consumer 35mm film with golden amber midtones",
+      "contrast": 1.12,
+      "saturation": 1.1,
+      "warmth": 0.28,
+      "bw": false
+    },
+    "s20": {
+      "file": "luts_2d/s20.png",
+      "category": "CCD",
+      "description": "2000s super-compact CCD with crisp daylight contrast and slightly cool whites",
+      "contrast": 1.11,
+      "saturation": 1.06,
+      "warmth": -0.1,
+      "bw": false
+    },
+    "lomo": {
+      "file": "luts_2d/lomo.png",
+      "category": "Film",
+      "description": "Lomography LC-A cross-processed look with deep saturated shadows and vivid yellows",
+      "contrast": 1.26,
+      "saturation": 1.28,
+      "warmth": 0.05,
+      "bw": false
+    },
+    "a35": {
+      "file": "luts_2d/a35.png",
+      "category": "Film",
+      "description": "Vintage 1970s golden-hour 35mm film with warm sepia-amber fade",
+      "contrast": 1.08,
+      "saturation": 0.95,
+      "warmth": 0.34,
+      "bw": false
+    },
+    "x20": {
+      "file": "luts_2d/x20.png",
+      "category": "Film",
+      "description": "Dual-tone optical finder film with rich olive-slate shadows and crisp whites",
+      "contrast": 1.18,
+      "saturation": 0.98,
+      "warmth": 0.04,
+      "bw": false
+    },
+    "polar": {
+      "file": "luts_2d/polar.png",
+      "category": "Instant",
+      "description": "Classic 1:1 SX-70 instant film with dreamy warm-amber cast and soft black lift",
+      "contrast": 1.02,
+      "saturation": 0.86,
+      "warmth": 0.24,
+      "bw": false
+    },
+    "dv": {
+      "file": "luts_2d/dv.png",
+      "category": "Camcorder",
+      "description": "Pocket digital video with clean electronic contrast and cool-neutral balance",
+      "contrast": 1.14,
+      "saturation": 1.08,
+      "warmth": -0.15,
+      "bw": false
+    },
+    "g7x": {
+      "file": "luts_2d/g7x.png",
+      "category": "CCD",
+      "description": "Modern-retro creator compact with flattering warm skin tones and crisp contrast",
+      "contrast": 1.12,
+      "saturation": 1.14,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "mini99": {
+      "file": "luts_2d/mini99.png",
+      "category": "Instant",
+      "description": "Color-dial instant analog with vivid magenta-amber highlights and deep blacks",
+      "contrast": 1.16,
+      "saturation": 1.16,
+      "warmth": 0.14,
+      "bw": false
+    },
+    "f505": {
+      "file": "luts_2d/f505.png",
+      "category": "CCD",
+      "description": "Swivel-lens early-2000s prosumer CCD with natural greens and cool-neutral skies",
+      "contrast": 1.1,
+      "saturation": 1.05,
+      "warmth": -0.06,
+      "bw": false
+    },
+    "f50": {
+      "file": "luts_2d/f50.png",
+      "category": "CCD",
+      "description": "High-sensitivity Fujifilm-style CCD with clean pastel skin and subtle teal shadows",
+      "contrast": 1.08,
+      "saturation": 1.04,
+      "warmth": 0.04,
+      "bw": false
+    },
+    "c40": {
+      "file": "luts_2d/c40.png",
+      "category": "CCD",
+      "description": "Chunky 2002 travel CCD with warm sunny daylight palette and rich blues",
+      "contrast": 1.13,
+      "saturation": 1.16,
+      "warmth": 0.16,
+      "bw": false
+    },
+    "s600": {
+      "file": "luts_2d/s600.png",
+      "category": "CCD",
+      "description": "Sharp silver-era CCD with crisp micro-contrast and neutral-cool whites",
+      "contrast": 1.15,
+      "saturation": 1.02,
+      "warmth": -0.14,
+      "bw": false
+    },
+    "nt16": {
+      "file": "luts_2d/nt16.png",
+      "category": "Film",
+      "description": "16mm motion-picture negative with rich cinema contrast, teal shadows, warm skin",
+      "contrast": 1.22,
+      "saturation": 1.04,
+      "warmth": 0.12,
+      "bw": false
+    },
+    "h20": {
+      "file": "luts_2d/h20.png",
+      "category": "CCD",
+      "description": "Compact travel-zoom CCD with bright saturated foliage and clear skies",
+      "contrast": 1.12,
+      "saturation": 1.18,
+      "warmth": 0.02,
+      "bw": false
+    },
+    "h70": {
+      "file": "luts_2d/h70.png",
+      "category": "CCD",
+      "description": "Warm evening travel CCD with golden highlights and gentle shadow lift",
+      "contrast": 1.1,
+      "saturation": 1.12,
+      "warmth": 0.2,
+      "bw": false
+    },
+    "m7": {
+      "file": "luts_2d/m7.png",
+      "category": "Film",
+      "description": "Classic German rangefinder B&W/silver-gelatin with rich tonal separation",
+      "contrast": 1.28,
+      "saturation": 0.0,
+      "warmth": 0.0,
+      "bw": true
+    },
+    "sx70": {
+      "file": "luts_2d/sx70.png",
+      "category": "Instant",
+      "description": "Classic SX-70 square instant film with dreamy teal-green shadows and warm highlights",
+      "contrast": 1.05,
+      "saturation": 0.88,
+      "warmth": 0.22,
+      "bw": false
+    },
+    "2000s": {
+      "file": "luts_2d/2000s.png",
+      "category": "Special",
+      "description": "2000s Bloom dreamy soft-glow CCD with pastel highlights and airy contrast",
+      "contrast": 1.04,
+      "saturation": 1.08,
+      "warmth": 0.14,
+      "bw": false
+    },
+    "big_shot": {
+      "file": "luts_2d/big_shot.png",
+      "category": "Special",
+      "description": "Big Shot portrait instant camera with punchy flash contrast and warm skin",
+      "contrast": 1.18,
+      "saturation": 1.06,
+      "warmth": 0.16,
+      "bw": false
+    },
+    "dispo": {
+      "file": "luts_2d/dispo.png",
+      "category": "Film",
+      "description": "Classic green/yellow disposable camera with lifted shadows and punchy daylight color",
+      "contrast": 1.18,
+      "saturation": 1.14,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "dispo_k": {
+      "file": "luts_2d/dispo_k.png",
+      "category": "Film",
+      "description": "Warm Kodak-style disposable film with golden highlights and crisp grain curve",
+      "contrast": 1.2,
+      "saturation": 1.16,
+      "warmth": 0.22,
+      "bw": false
+    },
+    "v2014": {
+      "file": "luts_2d/v2014.png",
+      "category": "Special",
+      "description": "2014 nostalgic mobile filter look with faded blacks and warm-rose midtones",
+      "contrast": 1.06,
+      "saturation": 0.92,
+      "warmth": 0.18,
+      "bw": false
+    },
+    "booth": {
+      "file": "luts_2d/booth.png",
+      "category": "Special",
+      "description": "Retro 4-strip photobooth flash grade with crisp monochrome-warm contrast",
+      "contrast": 1.26,
+      "saturation": 0.78,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "inst": {
+      "file": "luts_2d/inst.png",
+      "category": "Instant",
+      "description": "Instant mini classic pastel frame look with soft cyan shadows",
+      "contrast": 1.06,
+      "saturation": 0.92,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "inst_w": {
+      "file": "luts_2d/inst_w.png",
+      "category": "Instant",
+      "description": "Instant wide print look with warm cream highlights and gentle fade",
+      "contrast": 1.04,
+      "saturation": 0.95,
+      "warmth": 0.14,
+      "bw": false
+    },
+    "xs10": {
+      "file": "luts_2d/xs10.png",
+      "category": "CCD",
+      "description": "Retro handheld console camera low-bit crisp contrast with cool-green cast",
+      "contrast": 1.24,
+      "saturation": 0.84,
+      "warmth": -0.1,
+      "bw": false
+    },
+    "y2k": {
+      "file": "luts_2d/y2k.png",
+      "category": "Special",
+      "description": "Cyber Y2K metallic CCD with cool blue-violet shadows and glossy highlights",
+      "contrast": 1.16,
+      "saturation": 1.16,
+      "warmth": -0.2,
+      "bw": false
+    },
+    "action": {
+      "file": "luts_2d/action.png",
+      "category": "Special",
+      "description": "Action-cam wide outdoor grade with vivid skies and punchy micro-contrast",
+      "contrast": 1.2,
+      "saturation": 1.24,
+      "warmth": -0.04,
+      "bw": false
+    },
+    "nx": {
+      "file": "luts_2d/nx.png",
+      "category": "Film",
+      "description": "SLR NX matte-film grade with deep rich blacks and natural skin tones",
+      "contrast": 1.22,
+      "saturation": 1.02,
+      "warmth": 0.08,
+      "bw": false
+    },
+    "hdc": {
+      "file": "luts_2d/hdc.png",
+      "category": "Camcorder",
+      "description": "HD camcorder clean electronic contrast with cool-neutral daylight balance",
+      "contrast": 1.15,
+      "saturation": 1.08,
+      "warmth": -0.12,
+      "bw": false
+    },
+    "m10": {
+      "file": "luts_2d/m10.png",
+      "category": "CCD",
+      "description": "Compact early-2000s M10 CCD with warm indoor skin tones and soft contrast",
+      "contrast": 1.08,
+      "saturation": 1.08,
+      "warmth": 0.16,
+      "bw": false
+    },
+    "a2300": {
+      "file": "luts_2d/a2300.png",
+      "category": "CCD",
+      "description": "Slim 2012 pocket CCD with crisp vibrant colors and clean daylight whites",
+      "contrast": 1.12,
+      "saturation": 1.16,
+      "warmth": -0.04,
+      "bw": false
+    },
+    "a40": {
+      "file": "luts_2d/a40.png",
+      "category": "CCD",
+      "description": "2002 2MP chunky CCD with nostalgic warm-green cast and soft highlights",
+      "contrast": 1.06,
+      "saturation": 0.96,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "a620": {
+      "file": "luts_2d/a620.png",
+      "category": "CCD",
+      "description": "Swivel-screen 2005 Power-CCD with rich Kodak-like blues and warm mids",
+      "contrast": 1.14,
+      "saturation": 1.14,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "blue": {
+      "file": "luts_2d/blue.png",
+      "category": "Special",
+      "description": "Monochromatic cyanotype-blue atmospheric film grade",
+      "contrast": 1.18,
+      "saturation": 0.45,
+      "warmth": -0.45,
+      "bw": false
+    },
+    "gold": {
+      "file": "luts_2d/gold.png",
+      "category": "Film",
+      "description": "Classic 200-speed golden daylight film with warm amber highlights",
+      "contrast": 1.14,
+      "saturation": 1.14,
+      "warmth": 0.3,
+      "bw": false
+    },
+    "gr": {
+      "file": "luts_2d/gr.png",
+      "category": "Film",
+      "description": "High-contrast B&W street positive with deep crushed blacks and crisp silver mids",
+      "contrast": 1.38,
+      "saturation": 0.0,
+      "warmth": 0.0,
+      "bw": true
+    },
+    "c123": {
+      "file": "luts_2d/c123.png",
+      "category": "CCD",
+      "description": "Entry-level 2004 CCD with slightly cool shadows and punchy reds",
+      "contrast": 1.12,
+      "saturation": 1.1,
+      "warmth": 0.04,
+      "bw": false
+    },
+    "cx733": {
+      "file": "luts_2d/cx733.png",
+      "category": "CCD",
+      "description": "EasyShare-style warm sunny CCD with saturated yellows and blues",
+      "contrast": 1.15,
+      "saturation": 1.2,
+      "warmth": 0.16,
+      "bw": false
+    },
+    "dc210": {
+      "file": "luts_2d/dc210.png",
+      "category": "CCD",
+      "description": "1997 early digital CCD with lo-fi warm-amber cast and lifted shadows",
+      "contrast": 1.05,
+      "saturation": 0.88,
+      "warmth": 0.18,
+      "bw": false
+    },
+    "f410": {
+      "file": "luts_2d/f410.png",
+      "category": "CCD",
+      "description": "SuperCCD-inspired pastel portrait grade with luminous skin tones",
+      "contrast": 1.08,
+      "saturation": 1.06,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "f71": {
+      "file": "luts_2d/f71.png",
+      "category": "CCD",
+      "description": "Clean travel-compact CCD with crisp greens and neutral-cool whites",
+      "contrast": 1.11,
+      "saturation": 1.08,
+      "warmth": -0.06,
+      "bw": false
+    },
+    "fe402": {
+      "file": "luts_2d/fe402.png",
+      "category": "CCD",
+      "description": "Slim metallic pocket CCD with cool-silver highlights and gentle contrast",
+      "contrast": 1.09,
+      "saturation": 1.02,
+      "warmth": -0.14,
+      "bw": false
+    },
+    "h10": {
+      "file": "luts_2d/h10.png",
+      "category": "CCD",
+      "description": "Compact travel-zoom CCD with rich foliage and clear sky contrast",
+      "contrast": 1.14,
+      "saturation": 1.16,
+      "warmth": 0.02,
+      "bw": false
+    },
+    "i10": {
+      "file": "luts_2d/i10.png",
+      "category": "CCD",
+      "description": "Ultra-slim 2006 CCD with cool indoor flash balance and punchy blacks",
+      "contrast": 1.15,
+      "saturation": 1.06,
+      "warmth": -0.12,
+      "bw": false
+    },
+    "ixus70": {
+      "file": "luts_2d/ixus70.png",
+      "category": "CCD",
+      "description": "Iconic 2007 flat-metal IXUS CCD with balanced warm skin and crisp blues",
+      "contrast": 1.12,
+      "saturation": 1.12,
+      "warmth": 0.1,
+      "bw": false
+    },
+    "lx5": {
+      "file": "luts_2d/lx5.png",
+      "category": "CCD",
+      "description": "Enthusiast wide-aperture compact with rich Leica-style micro-contrast",
+      "contrast": 1.18,
+      "saturation": 1.06,
+      "warmth": 0.04,
+      "bw": false
+    },
+    "mg330": {
+      "file": "luts_2d/mg330.png",
+      "category": "Camcorder",
+      "description": "Hard-drive camcorder with punchy video gamma and cool-magenta shadows",
+      "contrast": 1.16,
+      "saturation": 1.1,
+      "warmth": -0.1,
+      "bw": false
+    },
+    "n23": {
+      "file": "luts_2d/n23.png",
+      "category": "CCD",
+      "description": "Compact 2000s CCD with neutral-warm balance and soft highlight roll-off",
+      "contrast": 1.08,
+      "saturation": 1.04,
+      "warmth": 0.08,
+      "bw": false
+    },
+    "original": {
+      "file": "luts_2d/original.png",
+      "category": "CCD",
+      "description": "Clean neutral sensor pass-through with minimal calibrated contrast",
+      "contrast": 1.02,
+      "saturation": 1.02,
+      "warmth": 0.0,
+      "bw": false
+    },
+    "original2": {
+      "file": "luts_2d/original2.png",
+      "category": "CCD",
+      "description": "Clean neutral daylight pass-through with subtle highlight clarity",
+      "contrast": 1.04,
+      "saturation": 1.04,
+      "warmth": 0.02,
+      "bw": false
+    },
+    "original_r": {
+      "file": "luts_2d/original_r.png",
+      "category": "Film",
+      "description": "Clean neutral film-curve pass-through with gentle shadow warmth",
+      "contrast": 1.05,
+      "saturation": 1.02,
+      "warmth": 0.05,
+      "bw": false
+    },
+    "rfc": {
+      "file": "luts_2d/rfc.png",
+      "category": "Film",
+      "description": "Classic rangefinder color film with emerald-slate shadows and warm highlights",
+      "contrast": 1.16,
+      "saturation": 1.04,
+      "warmth": 0.12,
+      "bw": false
+    },
+    "sipic": {
+      "file": "luts_2d/sipic.png",
+      "category": "CCD",
+      "description": "Pocket novelty CCD with bright saturated primaries and crisp contrast",
+      "contrast": 1.16,
+      "saturation": 1.24,
+      "warmth": 0.08,
+      "bw": false
+    },
+    "sl400": {
+      "file": "luts_2d/sl400.png",
+      "category": "CCD",
+      "description": "2003 ultra-slim CCD with cool-silver tone and crisp daylight contrast",
+      "contrast": 1.11,
+      "saturation": 1.02,
+      "warmth": -0.12,
+      "bw": false
+    },
+    "t90": {
+      "file": "luts_2d/t90.png",
+      "category": "CCD",
+      "description": "Touch-era slim CCD with vibrant saturated colors and glossy contrast",
+      "contrast": 1.14,
+      "saturation": 1.2,
+      "warmth": -0.04,
+      "bw": false
+    },
+    "u400": {
+      "file": "luts_2d/u400.png",
+      "category": "CCD",
+      "description": "All-weather silver compact CCD with cool oceanic blues and clean whites",
+      "contrast": 1.1,
+      "saturation": 1.06,
+      "warmth": -0.18,
+      "bw": false
+    },
+    "u7040": {
+      "file": "luts_2d/u7040.png",
+      "category": "CCD",
+      "description": "2010 compact CCD with bright vivid foliage and warm-neutral skin",
+      "contrast": 1.12,
+      "saturation": 1.16,
+      "warmth": 0.06,
+      "bw": false
+    },
+    "wg1": {
+      "file": "luts_2d/wg1.png",
+      "category": "CCD",
+      "description": "Rugged outdoor CCD with punchy adventure contrast and deep blues",
+      "contrast": 1.18,
+      "saturation": 1.2,
+      "warmth": -0.06,
+      "bw": false
+    },
+    "xg": {
+      "file": "luts_2d/xg.png",
+      "category": "Film",
+      "description": "Classic 1970s Japanese SLR film with warm amber mids and rich blacks",
+      "contrast": 1.18,
+      "saturation": 1.06,
+      "warmth": 0.18,
+      "bw": false
+    },
+    "xs3": {
+      "file": "luts_2d/xs3.png",
+      "category": "CCD",
+      "description": "Minimalist pocket CCD with clean neutral contrast and cool shadows",
+      "contrast": 1.1,
+      "saturation": 1.04,
+      "warmth": -0.08,
+      "bw": false
+    },
+    "z50": {
+      "file": "luts_2d/z50.png",
+      "category": "CCD",
+      "description": "Warm golden-era CCD with flattering skin tones and soft contrast",
+      "contrast": 1.09,
+      "saturation": 1.1,
+      "warmth": 0.14,
+      "bw": false
+    },
+    "zr1500": {
+      "file": "luts_2d/zr1500.png",
+      "category": "CCD",
+      "description": "Selfie-era Japanese CCD with bright airy skin luminance and pastel highlights",
+      "contrast": 1.05,
+      "saturation": 1.08,
+      "warmth": 0.08,
+      "bw": false
+    }
+  }
+}

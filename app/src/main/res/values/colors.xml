@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="aayna_charcoal_bg">#141518</color>
-    <color name="aayna_charcoal_surface">#1C1E22</color>
-    <color name="aayna_metallic_silver">#D8DCE3</color>
-    <color name="aayna_amber_accent">#E09F3E</color>
+    <color name="aayna_charcoal_bg">#191818</color>
+    <color name="aayna_charcoal_surface">#242222</color>
+    <color name="aayna_metallic_silver">#F2EDE4</color>
+    <color name="aayna_amber_accent">#FFB347</color>
 </resources>

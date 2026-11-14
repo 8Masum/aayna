@@ -1,0 +1,721 @@
+{
+  "version": 2,
+  "proportions": {
+    "camera_screen_h_mid_line": 0.4119,
+    "skin_h_mid_line": 0.416,
+    "camera_screen_container_ratio": 0.6558,
+    "viewport_aspect": "3:4",
+    "viewport_height_ratio": 0.8411,
+    "bezel_size_px": [
+      900,
+      1100
+    ],
+    "bezel_cutout_px": [
+      103,
+      28,
+      797,
+      953
+    ],
+    "chassis_size_px": [
+      720,
+      1600
+    ],
+    "shutter_size_px": [
+      240,
+      240
+    ],
+    "cam_icon_size_px": [
+      160,
+      160
+    ]
+  },
+  "screenGlassSheen": "skins/screen_glass_sheen.png",
+  "skins": {
+    "skin_charcoal_metal": {
+      "id": "skin_charcoal_metal",
+      "name": "Charcoal Metal",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_charcoal_metal.png",
+      "bezel": "skins/bezel_charcoal_metal.png",
+      "shutter": "skins/shutter_charcoal_metal.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#4C4A4E",
+      "baseHex": "#2A282A"
+    },
+    "skin_silver_brushed": {
+      "id": "skin_silver_brushed",
+      "name": "Brushed Silver",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_silver_brushed.png",
+      "bezel": "skins/bezel_silver_brushed.png",
+      "shutter": "skins/shutter_silver_brushed.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#DEE2E6",
+      "baseHex": "#BCC0C6"
+    },
+    "skin_vintage_cream": {
+      "id": "skin_vintage_cream",
+      "name": "Vintage Cream",
+      "material": "polycarbonate",
+      "chassis": "skins/chassis_vintage_cream.png",
+      "bezel": "skins/bezel_vintage_cream.png",
+      "shutter": "skins/shutter_vintage_cream.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#F5EEDE",
+      "baseHex": "#E8DFCC"
+    },
+    "skin_y2k_cyan": {
+      "id": "skin_y2k_cyan",
+      "name": "Y2K Ice Cyan",
+      "material": "gloss_plastic",
+      "chassis": "skins/chassis_y2k_cyan.png",
+      "bezel": "skins/bezel_y2k_cyan.png",
+      "shutter": "skins/shutter_y2k_cyan.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#BAECF6",
+      "baseHex": "#84CEE0"
+    },
+    "skin_y2k_lavender": {
+      "id": "skin_y2k_lavender",
+      "name": "Y2K Lavender",
+      "material": "gloss_plastic",
+      "chassis": "skins/chassis_y2k_lavender.png",
+      "bezel": "skins/bezel_y2k_lavender.png",
+      "shutter": "skins/shutter_y2k_lavender.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#D6CCF0",
+      "baseHex": "#B0A2D6"
+    },
+    "skin_matte_obsidian": {
+      "id": "skin_matte_obsidian",
+      "name": "Matte Obsidian",
+      "material": "leatherette",
+      "chassis": "skins/chassis_matte_obsidian.png",
+      "bezel": "skins/bezel_matte_obsidian.png",
+      "shutter": "skins/shutter_matte_obsidian.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#303034",
+      "baseHex": "#1A1A1C"
+    },
+    "skin_leather_cognac": {
+      "id": "skin_leather_cognac",
+      "name": "Cognac Leather",
+      "material": "leatherette",
+      "chassis": "skins/chassis_leather_cognac.png",
+      "bezel": "skins/bezel_leather_cognac.png",
+      "shutter": "skins/shutter_leather_cognac.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#A8663E",
+      "baseHex": "#80482A"
+    },
+    "skin_leather_olive": {
+      "id": "skin_leather_olive",
+      "name": "Olive Leatherette",
+      "material": "leatherette",
+      "chassis": "skins/chassis_leather_olive.png",
+      "bezel": "skins/bezel_leather_olive.png",
+      "shutter": "skins/shutter_leather_olive.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#687656",
+      "baseHex": "#48543A"
+    },
+    "skin_grunge_slate": {
+      "id": "skin_grunge_slate",
+      "name": "Grunge Slate",
+      "material": "weathered_metal",
+      "chassis": "skins/chassis_grunge_slate.png",
+      "bezel": "skins/bezel_grunge_slate.png",
+      "shutter": "skins/shutter_grunge_slate.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#6A727A",
+      "baseHex": "#444A50"
+    },
+    "skin_titanium_champagne": {
+      "id": "skin_titanium_champagne",
+      "name": "Champagne Titanium",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_titanium_champagne.png",
+      "bezel": "skins/bezel_titanium_champagne.png",
+      "shutter": "skins/shutter_titanium_champagne.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#D6CAB6",
+      "baseHex": "#B6A892"
+    },
+    "skin_polar_ivory": {
+      "id": "skin_polar_ivory",
+      "name": "Polar Ivory",
+      "material": "polycarbonate",
+      "chassis": "skins/chassis_polar_ivory.png",
+      "bezel": "skins/bezel_polar_ivory.png",
+      "shutter": "skins/shutter_polar_ivory.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#FAF8F4",
+      "baseHex": "#F0EDE6"
+    },
+    "skin_inst_pastel_mint": {
+      "id": "skin_inst_pastel_mint",
+      "name": "Pastel Mint",
+      "material": "polycarbonate",
+      "chassis": "skins/chassis_inst_pastel_mint.png",
+      "bezel": "skins/bezel_inst_pastel_mint.png",
+      "shutter": "skins/shutter_inst_pastel_mint.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#D4F2E6",
+      "baseHex": "#B2E0CE"
+    },
+    "skin_inst_blush": {
+      "id": "skin_inst_blush",
+      "name": "Pastel Blush",
+      "material": "polycarbonate",
+      "chassis": "skins/chassis_inst_blush.png",
+      "bezel": "skins/bezel_inst_blush.png",
+      "shutter": "skins/shutter_inst_blush.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#F8DAE0",
+      "baseHex": "#EABCC4"
+    },
+    "skin_quik_yellow_film": {
+      "id": "skin_quik_yellow_film",
+      "name": "Quik Film Yellow",
+      "material": "matte_plastic",
+      "chassis": "skins/chassis_quik_yellow_film.png",
+      "bezel": "skins/bezel_quik_yellow_film.png",
+      "shutter": "skins/shutter_quik_yellow_film.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#F4D44E",
+      "baseHex": "#DEB82A"
+    },
+    "skin_dv_cobalt_metallic": {
+      "id": "skin_dv_cobalt_metallic",
+      "name": "DV Cobalt",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_dv_cobalt_metallic.png",
+      "bezel": "skins/bezel_dv_cobalt_metallic.png",
+      "shutter": "skins/shutter_dv_cobalt_metallic.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#4E6A9A",
+      "baseHex": "#2E446C"
+    },
+    "skin_vhs_graphite": {
+      "id": "skin_vhs_graphite",
+      "name": "VHS Graphite",
+      "material": "leatherette",
+      "chassis": "skins/chassis_vhs_graphite.png",
+      "bezel": "skins/bezel_vhs_graphite.png",
+      "shutter": "skins/shutter_vhs_graphite.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#52545A",
+      "baseHex": "#34363A"
+    },
+    "skin_rangefinder_brass": {
+      "id": "skin_rangefinder_brass",
+      "name": "Rangefinder Brass",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_rangefinder_brass.png",
+      "bezel": "skins/bezel_rangefinder_brass.png",
+      "shutter": "skins/shutter_rangefinder_brass.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#B8944C",
+      "baseHex": "#2C2A26"
+    },
+    "skin_16mm_cine": {
+      "id": "skin_16mm_cine",
+      "name": "16mm Cine Black",
+      "material": "leatherette",
+      "chassis": "skins/chassis_16mm_cine.png",
+      "bezel": "skins/bezel_16mm_cine.png",
+      "shutter": "skins/shutter_16mm_cine.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#3E3C3A",
+      "baseHex": "#201F1E"
+    },
+    "skin_cyber_translucent": {
+      "id": "skin_cyber_translucent",
+      "name": "Cyber Translucent",
+      "material": "translucent",
+      "chassis": "skins/chassis_cyber_translucent.png",
+      "bezel": "skins/bezel_cyber_translucent.png",
+      "shutter": "skins/shutter_cyber_translucent.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#58809C",
+      "baseHex": "#304052"
+    },
+    "skin_studio_monochrome": {
+      "id": "skin_studio_monochrome",
+      "name": "Studio Monochrome",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_studio_monochrome.png",
+      "bezel": "skins/bezel_studio_monochrome.png",
+      "shutter": "skins/shutter_studio_monochrome.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#8A8A8C",
+      "baseHex": "#5E5E60"
+    },
+    "skin_slr_nx": {
+      "id": "skin_slr_nx",
+      "name": "SLR Matte NX",
+      "material": "leatherette",
+      "chassis": "skins/chassis_slr_nx.png",
+      "bezel": "skins/bezel_slr_nx.png",
+      "shutter": "skins/shutter_slr_nx.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#404044",
+      "baseHex": "#222224"
+    },
+    "skin_booth_strip": {
+      "id": "skin_booth_strip",
+      "name": "Photobooth Bronze",
+      "material": "brushed_metal",
+      "chassis": "skins/chassis_booth_strip.png",
+      "bezel": "skins/bezel_booth_strip.png",
+      "shutter": "skins/shutter_booth_strip.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#9A724E",
+      "baseHex": "#6C4E36"
+    },
+    "skin_bloom_2000s": {
+      "id": "skin_bloom_2000s",
+      "name": "2000s Pearlescent",
+      "material": "gloss_plastic",
+      "chassis": "skins/chassis_bloom_2000s.png",
+      "bezel": "skins/bezel_bloom_2000s.png",
+      "shutter": "skins/shutter_bloom_2000s.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#F0EAF6",
+      "baseHex": "#D6D2E0"
+    },
+    "skin_game_console": {
+      "id": "skin_game_console",
+      "name": "Handheld Console",
+      "material": "matte_plastic",
+      "chassis": "skins/chassis_game_console.png",
+      "bezel": "skins/bezel_game_console.png",
+      "shutter": "skins/shutter_game_console.png",
+      "screenGlassSheen": "skins/screen_glass_sheen.png",
+      "accentHex": "#6C4872",
+      "baseHex": "#424048"
+    }
+  },
+  "cameraIcons": {
+    "z30": {
+      "icon": "skins/cam_icon_z30.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "ixus95": {
+      "icon": "skins/cam_icon_ixus95.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "m532": {
+      "icon": "skins/cam_icon_m532.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "u300": {
+      "icon": "skins/cam_icon_u300.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_y2k_cyan"
+    },
+    "ixus210": {
+      "icon": "skins/cam_icon_ixus210.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_y2k_lavender"
+    },
+    "dc200": {
+      "icon": "skins/cam_icon_dc200.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_grunge_slate"
+    },
+    "grf": {
+      "icon": "skins/cam_icon_grf.png",
+      "style": "street_compact",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "dcr": {
+      "icon": "skins/cam_icon_dcr.png",
+      "style": "camcorder",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "v80": {
+      "icon": "skins/cam_icon_v80.png",
+      "style": "camcorder",
+      "defaultSkin": "skin_vhs_graphite"
+    },
+    "ccd801": {
+      "icon": "skins/cam_icon_ccd801.png",
+      "style": "camcorder",
+      "defaultSkin": "skin_grunge_slate"
+    },
+    "m20": {
+      "icon": "skins/cam_icon_m20.png",
+      "style": "vertical_dv",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "m550": {
+      "icon": "skins/cam_icon_m550.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_vintage_cream"
+    },
+    "t10": {
+      "icon": "skins/cam_icon_t10.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_studio_monochrome"
+    },
+    "instm": {
+      "icon": "skins/cam_icon_instm.png",
+      "style": "instant_mini",
+      "defaultSkin": "skin_inst_pastel_mint"
+    },
+    "instl": {
+      "icon": "skins/cam_icon_instl.png",
+      "style": "instant_wide",
+      "defaultSkin": "skin_inst_blush"
+    },
+    "fxnr": {
+      "icon": "skins/cam_icon_fxnr.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "quik": {
+      "icon": "skins/cam_icon_quik.png",
+      "style": "disposable",
+      "defaultSkin": "skin_quik_yellow_film"
+    },
+    "d3d": {
+      "icon": "skins/cam_icon_d3d.png",
+      "style": "quad_lens",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "n800": {
+      "icon": "skins/cam_icon_n800.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "f100": {
+      "icon": "skins/cam_icon_f100.png",
+      "style": "film_slr",
+      "defaultSkin": "skin_titanium_champagne"
+    },
+    "s20": {
+      "icon": "skins/cam_icon_s20.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "lomo": {
+      "icon": "skins/cam_icon_lomo.png",
+      "style": "lomo_compact",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "a35": {
+      "icon": "skins/cam_icon_a35.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_leather_cognac"
+    },
+    "x20": {
+      "icon": "skins/cam_icon_x20.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_leather_olive"
+    },
+    "polar": {
+      "icon": "skins/cam_icon_polar.png",
+      "style": "instant_polar",
+      "defaultSkin": "skin_polar_ivory"
+    },
+    "dv": {
+      "icon": "skins/cam_icon_dv.png",
+      "style": "vertical_dv",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "g7x": {
+      "icon": "skins/cam_icon_g7x.png",
+      "style": "street_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "mini99": {
+      "icon": "skins/cam_icon_mini99.png",
+      "style": "instant_mini",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "f505": {
+      "icon": "skins/cam_icon_f505.png",
+      "style": "swivel_ccd",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "f50": {
+      "icon": "skins/cam_icon_f50.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_titanium_champagne"
+    },
+    "c40": {
+      "icon": "skins/cam_icon_c40.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_y2k_cyan"
+    },
+    "s600": {
+      "icon": "skins/cam_icon_s600.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "nt16": {
+      "icon": "skins/cam_icon_nt16.png",
+      "style": "cine_16mm",
+      "defaultSkin": "skin_16mm_cine"
+    },
+    "h20": {
+      "icon": "skins/cam_icon_h20.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "h70": {
+      "icon": "skins/cam_icon_h70.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_leather_cognac"
+    },
+    "m7": {
+      "icon": "skins/cam_icon_m7.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_rangefinder_brass"
+    },
+    "sx70": {
+      "icon": "skins/cam_icon_sx70.png",
+      "style": "instant_polar",
+      "defaultSkin": "skin_polar_ivory"
+    },
+    "2000s": {
+      "icon": "skins/cam_icon_2000s.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_bloom_2000s"
+    },
+    "big_shot": {
+      "icon": "skins/cam_icon_big_shot.png",
+      "style": "instant_wide",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "dispo": {
+      "icon": "skins/cam_icon_dispo.png",
+      "style": "disposable",
+      "defaultSkin": "skin_quik_yellow_film"
+    },
+    "dispo_k": {
+      "icon": "skins/cam_icon_dispo_k.png",
+      "style": "disposable",
+      "defaultSkin": "skin_quik_yellow_film"
+    },
+    "v2014": {
+      "icon": "skins/cam_icon_v2014.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_vintage_cream"
+    },
+    "booth": {
+      "icon": "skins/cam_icon_booth.png",
+      "style": "instant_wide",
+      "defaultSkin": "skin_booth_strip"
+    },
+    "inst": {
+      "icon": "skins/cam_icon_inst.png",
+      "style": "instant_mini",
+      "defaultSkin": "skin_inst_pastel_mint"
+    },
+    "inst_w": {
+      "icon": "skins/cam_icon_inst_w.png",
+      "style": "instant_wide",
+      "defaultSkin": "skin_inst_blush"
+    },
+    "xs10": {
+      "icon": "skins/cam_icon_xs10.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_game_console"
+    },
+    "y2k": {
+      "icon": "skins/cam_icon_y2k.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_y2k_cyan"
+    },
+    "action": {
+      "icon": "skins/cam_icon_action.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "nx": {
+      "icon": "skins/cam_icon_nx.png",
+      "style": "film_slr",
+      "defaultSkin": "skin_slr_nx"
+    },
+    "hdc": {
+      "icon": "skins/cam_icon_hdc.png",
+      "style": "camcorder",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "m10": {
+      "icon": "skins/cam_icon_m10.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_titanium_champagne"
+    },
+    "a2300": {
+      "icon": "skins/cam_icon_a2300.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "a40": {
+      "icon": "skins/cam_icon_a40.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "a620": {
+      "icon": "skins/cam_icon_a620.png",
+      "style": "swivel_ccd",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "blue": {
+      "icon": "skins/cam_icon_blue.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_dv_cobalt_metallic"
+    },
+    "gold": {
+      "icon": "skins/cam_icon_gold.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_rangefinder_brass"
+    },
+    "gr": {
+      "icon": "skins/cam_icon_gr.png",
+      "style": "street_compact",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "c123": {
+      "icon": "skins/cam_icon_c123.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "cx733": {
+      "icon": "skins/cam_icon_cx733.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "dc210": {
+      "icon": "skins/cam_icon_dc210.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_grunge_slate"
+    },
+    "f410": {
+      "icon": "skins/cam_icon_f410.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "f71": {
+      "icon": "skins/cam_icon_f71.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "fe402": {
+      "icon": "skins/cam_icon_fe402.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "h10": {
+      "icon": "skins/cam_icon_h10.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "i10": {
+      "icon": "skins/cam_icon_i10.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_y2k_lavender"
+    },
+    "ixus70": {
+      "icon": "skins/cam_icon_ixus70.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "lx5": {
+      "icon": "skins/cam_icon_lx5.png",
+      "style": "street_compact",
+      "defaultSkin": "skin_matte_obsidian"
+    },
+    "mg330": {
+      "icon": "skins/cam_icon_mg330.png",
+      "style": "camcorder",
+      "defaultSkin": "skin_vhs_graphite"
+    },
+    "n23": {
+      "icon": "skins/cam_icon_n23.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_vintage_cream"
+    },
+    "original": {
+      "icon": "skins/cam_icon_original.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_studio_monochrome"
+    },
+    "original2": {
+      "icon": "skins/cam_icon_original2.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_studio_monochrome"
+    },
+    "original_r": {
+      "icon": "skins/cam_icon_original_r.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_studio_monochrome"
+    },
+    "rfc": {
+      "icon": "skins/cam_icon_rfc.png",
+      "style": "rangefinder",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "sipic": {
+      "icon": "skins/cam_icon_sipic.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_inst_blush"
+    },
+    "sl400": {
+      "icon": "skins/cam_icon_sl400.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "t90": {
+      "icon": "skins/cam_icon_t90.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "u400": {
+      "icon": "skins/cam_icon_u400.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_silver_brushed"
+    },
+    "u7040": {
+      "icon": "skins/cam_icon_u7040.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_y2k_cyan"
+    },
+    "wg1": {
+      "icon": "skins/cam_icon_wg1.png",
+      "style": "ccd_chunky",
+      "defaultSkin": "skin_leather_olive"
+    },
+    "xg": {
+      "icon": "skins/cam_icon_xg.png",
+      "style": "film_slr",
+      "defaultSkin": "skin_charcoal_metal"
+    },
+    "xs3": {
+      "icon": "skins/cam_icon_xs3.png",
+      "style": "ccd_slim",
+      "defaultSkin": "skin_studio_monochrome"
+    },
+    "z50": {
+      "icon": "skins/cam_icon_z50.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_leather_cognac"
+    },
+    "zr1500": {
+      "icon": "skins/cam_icon_zr1500.png",
+      "style": "ccd_compact",
+      "defaultSkin": "skin_vintage_cream"
+    },
+    "carousel": {
+      "icon": "skins/cam_icon_carousel.png",
+      "style": "carousel_badge",
+      "defaultSkin": "skin_charcoal_metal"
+    }
+  }
+}

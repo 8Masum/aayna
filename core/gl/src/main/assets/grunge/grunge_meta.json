@@ -3,8 +3,14 @@
     "light_leak_warm": "grunge/light_leak_warm.png",
     "light_leak_edge": "grunge/light_leak_edge.png",
     "dust_scratches": "grunge/dust_scratches.png",
+    "dv_scanlines": "grunge/dv_scanlines.png",
     "instant_frame": "grunge/instant_frame.png",
-    "film_border_35mm": "grunge/film_border_35mm.png"
+    "instant_wide_frame": "grunge/instant_wide_frame.png",
+    "polaroid_square_frame": "grunge/polaroid_square_frame.png",
+    "film_border_35mm": "grunge/film_border_35mm.png",
+    "cine_16mm_frame": "grunge/cine_16mm_frame.png",
+    "photo_booth_4strip_frame": "grunge/photo_booth_4strip_frame.png",
+    "peephole_dispo_mask": "grunge/peephole_dispo_mask.png"
   },
   "frames": {
     "instant_frame": {
@@ -21,6 +27,34 @@
         816
       ]
     },
+    "instant_wide_frame": {
+      "uMin": 0.0546875,
+      "vMin": 0.0703125,
+      "uMax": 0.9453125,
+      "vMax": 0.7734375,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        56,
+        72,
+        968,
+        792
+      ]
+    },
+    "polaroid_square_frame": {
+      "uMin": 0.119140625,
+      "vMin": 0.0546875,
+      "uMax": 0.880859375,
+      "vMax": 0.81640625,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        122,
+        56,
+        902,
+        836
+      ]
+    },
     "film_border_35mm": {
       "uMin": 0.046875,
       "vMin": 0.09375,
@@ -33,6 +67,74 @@
         96,
         976,
         928
+      ]
+    },
+    "cine_16mm_frame": {
+      "uMin": 0.125,
+      "vMin": 0.0703125,
+      "uMax": 0.875,
+      "vMax": 0.9296875,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        128,
+        72,
+        896,
+        952
+      ]
+    },
+    "photo_booth_4strip_frame": {
+      "uMin": 0.24609375,
+      "vMin": 0.04296875,
+      "uMax": 0.75390625,
+      "vMax": 0.89453125,
+      "widthPx": 1024,
+      "heightPx": 1024,
+      "windowPx": [
+        252,
+        44,
+        772,
+        916
+      ],
+      "panels": [
+        [
+          252,
+          44,
+          772,
+          244
+        ],
+        [
+          252,
+          268,
+          772,
+          468
+        ],
+        [
+          252,
+          492,
+          772,
+          692
+        ],
+        [
+          252,
+          716,
+          772,
+          916
+        ]
+      ]
+    },
+    "peephole_dispo_mask": {
+      "uMin": 0.14444444444444443,
+      "vMin": 0.1,
+      "uMax": 0.8555555555555555,
+      "vMax": 0.7909090909090909,
+      "widthPx": 900,
+      "heightPx": 1100,
+      "windowPx": [
+        130,
+        110,
+        770,
+        870
       ]
     }
   }
