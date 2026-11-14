@@ -1,0 +1,39 @@
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+      - question
+  categories:
+    - title: Camera & Imaging
+      labels:
+        - camera
+        - gl-shaders
+        - device-quirk
+    - title: Studio & UI/UX
+      labels:
+        - studio
+        - ui-ux
+        - accessibility
+    - title: Features & Enhancements
+      labels:
+        - enhancement
+    - title: Performance & Bug Fixes
+      labels:
+        - performance
+        - bug
+    - title: Security & Offline Privacy
+      labels:
+        - security
+    - title: Dependencies & CI
+      labels:
+        - dependencies
+        - ci
+        - release
+    - title: Documentation
+      labels:
+        - documentation
+    - title: Other Changes
+      labels:
+        - "*"

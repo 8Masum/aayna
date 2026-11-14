@@ -13,6 +13,9 @@ updates:
     commit-message:
       prefix: "chore(deps)"
     groups:
+      android-gradle-plugin:
+        patterns:
+          - "com.android*"
       androidx-compose:
         patterns:
           - "androidx.compose*"
@@ -21,8 +24,12 @@ updates:
           - "androidx.camera*"
       kotlin-and-ksp:
         patterns:
-          - "org.jetbrains.kotlin*"
+          - "org.jetbrains.kotlin:*"
+          - "org.jetbrains.kotlin.*"
           - "com.google.devtools.ksp*"
+      kotlinx-coroutines:
+        patterns:
+          - "org.jetbrains.kotlinx*"
       androidx-core-and-lifecycle:
         patterns:
           - "androidx.core*"
@@ -31,6 +38,11 @@ updates:
           - "androidx.navigation*"
           - "androidx.room*"
           - "androidx.datastore*"
+          - "androidx.exifinterface*"
+      testing:
+        patterns:
+          - "junit*"
+          - "androidx.test*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -40,6 +52,10 @@ updates:
       time: "09:00"
       timezone: "UTC"
     open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "ci"
